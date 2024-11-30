@@ -1,0 +1,18 @@
+#ifndef PUBKEY_H_
+#define PUBKEY_H_
+
+#include <stdint.h>
+
+/*
+Run genkey.py, open output/*.keys, copy down the advertisement key and run:
+echo -n "advertisement key" | base64 -d | hexdump -C
+And copy down the 28 bytes of output below.
+*/
+
+static uint8_t public_key[28] = {
+    0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12,
+    0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12,
+    0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12,
+};
+
+#endif // PUBKEY_H_
