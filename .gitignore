@@ -34,3 +34,5 @@
 pubkey.h
 output
 .pio
+.vscode
+provision/output/
