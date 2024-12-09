@@ -15,4 +15,11 @@ static uint8_t public_key[28] = {
     0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12,
 };
 
+// Come up with a a random modem ID of your own.
+static const uint32_t modem_id = 0x12345678;
+
+// Come up with two random bytes of your own.
+static const uint32_t pubkey_magic1 = 0x11;
+static const uint32_t pubkey_magic2 = 0x22;
+
 #endif // PUBKEY_H_

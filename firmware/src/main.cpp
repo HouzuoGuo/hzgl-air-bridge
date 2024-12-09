@@ -1,10 +1,4 @@
-/**
- * hzgl-air-bridge beacon firmware.
- *
- * The work derives from:
- * - https://github.com/seemoo-lab/openhaystack/blob/main/Firmware/ESP32/main/openhaystack_main.c
- * - https://github.com/dchristl/macless-haystack/blob/main/firmware/ESP32/src/openhaystack_main.c
- */
+// hzgl-air-bridge beacon firmware.
 
 #include <Arduino.h>
 #include <esp_bt.h>
@@ -23,8 +17,11 @@
 #include <string.h>
 
 #include "pubkey.h"
+#include "uECC.h"
 
 static const char *LOG_TAG = "hzgl-air-bridge";
+
+#define CHECK_BIT(var, pos) ((var) & (1 << (7 - pos)))
 
 /** Callback function for BT events */
 static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param);
@@ -52,12 +49,12 @@ static esp_ble_adv_params_t ble_adv_params = {
     // Minimum advertising interval for undirected and low duty cycle
     // directed advertising. Range: 0x0020 to 0x4000 Default: N = 0x0800
     // (1.28 second) Time = N * 0.625 msec Time Range: 20 ms to 10.24 sec
-    .adv_int_min = 0x0020, // 20ms
+    .adv_int_min = 0x0640, // 1s
     // Advertising max interval:
     // Maximum advertising interval for undirected and low duty cycle
     // directed advertising. Range: 0x0020 to 0x4000 Default: N = 0x0800
     // (1.28 second) Time = N * 0.625 msec Time Range: 20 ms to 10.24 sec
-    .adv_int_max = 0x0020, // 20ms
+    .adv_int_max = 0x0C80, // 2s
     // Advertisement type
     .adv_type = ADV_TYPE_NONCONN_IND,
     // Use the random address
@@ -123,18 +120,114 @@ void set_payload_from_key(uint8_t *payload, uint8_t *public_key)
     payload[29] = public_key[0] >> 6;
 }
 
+void reset_advertising()
+{
+    esp_err_t status;
+    if ((status = esp_ble_gap_set_rand_addr(rnd_addr)) != ESP_OK)
+    {
+        ESP_LOGE(LOG_TAG, "couldn't set random address: %s", esp_err_to_name(status));
+        return;
+    }
+    if ((esp_ble_gap_config_adv_data_raw((uint8_t *)&adv_data, sizeof(adv_data))) != ESP_OK)
+    {
+        ESP_LOGE(LOG_TAG, "couldn't configure BLE adv: %s", esp_err_to_name(status));
+        return;
+    }
+}
+
+int is_valid_pubkey(uint8_t *pub_key_compressed)
+{
+    uint8_t with_sign_byte[29];
+    uint8_t pub_key_uncompressed[128];
+    const struct uECC_Curve_t *curve = uECC_secp224r1();
+    with_sign_byte[0] = 0x02;
+    memcpy(&with_sign_byte[1], pub_key_compressed, 28);
+    uECC_decompress(with_sign_byte, pub_key_uncompressed, curve);
+    if (!uECC_valid_public_key(pub_key_uncompressed, curve))
+    {
+        ESP_LOGW(LOG_TAG, "Generated public key tested as invalid");
+        return 0;
+    }
+    return 1;
+}
+
+void copy_4b_big_endian(uint8_t *dst, const uint32_t *src)
+{
+    uint32_t value = *src;
+    dst[0] = (value >> 24) & 0xFF;
+    dst[1] = (value >> 16) & 0xFF;
+    dst[2] = (value >> 8) & 0xFF;
+    dst[3] = value & 0xFF;
+}
+
+// index as first part of payload to have an often changing MAC address
+// [2b magic] [4byte index] [4byte msg_id] [4byte modem_id] [000.000] [1bit]
+// There is a rade-off between sending and receiving throughput (e.g. we could also use a 1-byte lookup table)
+void set_addr_and_payload_for_bit(uint32_t index, uint32_t msg_id, uint8_t bit)
+{
+    uint32_t valid_key_counter = 0;
+    static uint8_t public_key[28] = {0};
+    public_key[0] = pubkey_magic1;
+    public_key[1] = pubkey_magic2;
+    copy_4b_big_endian(&public_key[2], &index);
+    copy_4b_big_endian(&public_key[6], &msg_id);
+    copy_4b_big_endian(&public_key[10], &modem_id);
+    public_key[27] = bit;
+    do
+    {
+        copy_4b_big_endian(&public_key[14], &valid_key_counter);
+        // here, you could call `pub_from_priv(public_key, private_key)` to instead treat the payload as private key
+        valid_key_counter++; // for next round
+    } while (!is_valid_pubkey(public_key));
+    ESP_LOGI(LOG_TAG, "  pub key to use (%d. try): %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x ... %02x", valid_key_counter, public_key[0], public_key[1], public_key[2], public_key[3], public_key[4], public_key[5], public_key[6], public_key[7], public_key[8], public_key[9], public_key[10], public_key[11], public_key[12], public_key[13], public_key[14], public_key[15], public_key[16], public_key[17], public_key[19], public_key[19], public_key[20], public_key[21], public_key[22], public_key[23], public_key[24], public_key[25], public_key[26], public_key[27]);
+    set_addr_from_key(rnd_addr, public_key);
+    set_payload_from_key(adv_data, public_key);
+}
+
+void send_data_once_blocking(uint8_t *data_to_send, uint32_t len, uint32_t msg_id)
+{
+    ESP_LOGI(LOG_TAG, "Data to send (msg_id: %d): %s", msg_id, data_to_send);
+    uint8_t current_bit = 0;
+    // iterate byte-by-byte
+    for (int by_i = 0; by_i < len; by_i++)
+    {
+        ESP_LOGI(LOG_TAG, "  Sending byte %d/%d (0x%02x)", by_i, len - 1, data_to_send[by_i]);
+        // iterate bit-by-bit
+        for (int bi_i = 0; bi_i < 8; bi_i++)
+        {
+            if (CHECK_BIT(data_to_send[by_i], bi_i))
+            {
+                current_bit = 1;
+            }
+            else
+            {
+                current_bit = 0;
+            }
+            ESP_LOGD(LOG_TAG, "  Sending byte %d, bit %d: %d", by_i, bi_i, current_bit);
+            set_addr_and_payload_for_bit(by_i * 8 + bi_i, msg_id, current_bit);
+            ESP_LOGD(LOG_TAG, "    resetting. Will now use device address: %02x %02x %02x %02x %02x %02x", rnd_addr[0], rnd_addr[1], rnd_addr[2], rnd_addr[3], rnd_addr[4], rnd_addr[5]);
+            delay(100);
+            reset_advertising();
+        }
+    }
+    esp_ble_gap_stop_advertising();
+}
+
 void setup(void)
 {
+    esp_log_level_set("*", ESP_LOG_VERBOSE);
     Serial.begin(115200);
     ESP_LOGI(LOG_TAG, "starting up");
-    vTaskDelay(pdMS_TO_TICKS(5000));
+    delay(2000);
+    ESP_ERROR_CHECK(esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT));
     esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
-    esp_bt_controller_init(&bt_cfg);
-    esp_bt_controller_enable(ESP_BT_MODE_BLE);
+    ESP_ERROR_CHECK(esp_bt_controller_init(&bt_cfg));
+    ESP_ERROR_CHECK(esp_bt_controller_enable(ESP_BT_MODE_BLE));
     ESP_LOGI(LOG_TAG, "bluetooth initialised");
 
-    esp_bluedroid_init();
-    esp_bluedroid_enable();
+    ESP_ERROR_CHECK(esp_bluedroid_init());
+    ESP_ERROR_CHECK(esp_bluedroid_enable());
+    ESP_ERROR_CHECK(esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, ESP_PWR_LVL_P9));
     ESP_LOGI(LOG_TAG, "bluedroid initialised");
 
     set_addr_from_key(rnd_addr, public_key);
@@ -149,21 +242,23 @@ void setup(void)
         return;
     }
 
-    if ((status = esp_ble_gap_set_rand_addr(rnd_addr)) != ESP_OK)
-    {
-        ESP_LOGE(LOG_TAG, "couldn't set random address: %s", esp_err_to_name(status));
-        return;
-    }
-    if ((esp_ble_gap_config_adv_data_raw((uint8_t *)&adv_data, sizeof(adv_data))) != ESP_OK)
-    {
-        ESP_LOGE(LOG_TAG, "couldn't configure BLE adv: %s", esp_err_to_name(status));
-        return;
-    }
+    static uint8_t data_to_send[] = "hzgl";
+    uint32_t current_message_id = 0;
+    ESP_LOGI(LOG_TAG, "Sending initial default message: %s", data_to_send);
+    send_data_once_blocking(data_to_send, sizeof(data_to_send), current_message_id);
+
+    reset_advertising();
     ESP_LOGI(LOG_TAG, "application initialized");
 }
 
 void loop()
 {
     ESP_LOGI(LOG_TAG, "still alive");
-    vTaskDelay(pdMS_TO_TICKS(3000));
+
+    static uint8_t data_to_send[] = "hzgl";
+    uint32_t current_message_id = 0;
+    send_data_once_blocking(data_to_send, sizeof(data_to_send), current_message_id);
+    esp_ble_gap_stop_advertising();
+
+    delay(5000);
 }

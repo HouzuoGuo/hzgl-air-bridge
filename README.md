@@ -4,8 +4,9 @@ WIP: a telemetry data system based on OpenHaystack.
 
 The work derives from:
 
-- https://github.com/seemoo-lab/openhaystack
-- https://github.com/dchristl/macless-haystack
+- https://github.com/seemoo-lab/openhaystack (AGPL-3.0)
+- https://github.com/positive-security/send-my (AGPL-3.0)
+- https://github.com/dchristl/macless-haystack (GPL-3.0)
 
 ## Instructions
 
