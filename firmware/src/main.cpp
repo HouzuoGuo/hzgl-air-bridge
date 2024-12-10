@@ -26,9 +26,6 @@ static const char *LOG_TAG = "hzgl-air-bridge";
 /** Callback function for BT events */
 static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param);
 
-/** Random device address */
-static esp_bd_addr_t rnd_addr = {0xFF, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF};
-
 /** Advertisement payload */
 static uint8_t adv_data[31] = {
     0x1e,       /* Length (30) */
@@ -123,6 +120,7 @@ void set_payload_from_key(uint8_t *payload, uint8_t *public_key)
 void reset_advertising()
 {
     esp_err_t status;
+    esp_ble_gap_stop_advertising();
     if ((status = esp_ble_gap_set_rand_addr(rnd_addr)) != ESP_OK)
     {
         ESP_LOGE(LOG_TAG, "couldn't set random address: %s", esp_err_to_name(status));
@@ -158,6 +156,14 @@ void copy_4b_big_endian(uint8_t *dst, const uint32_t *src)
     dst[1] = (value >> 16) & 0xFF;
     dst[2] = (value >> 8) & 0xFF;
     dst[3] = value & 0xFF;
+}
+
+void pub_from_priv(uint8_t *pub_compressed, uint8_t *priv)
+{
+    const struct uECC_Curve_t *curve = uECC_secp224r1();
+    uint8_t pub_key_tmp[128];
+    uECC_compute_public_key(priv, pub_key_tmp, curve);
+    uECC_compress(pub_key_tmp, pub_compressed, curve);
 }
 
 // index as first part of payload to have an often changing MAC address
@@ -206,8 +212,8 @@ void send_data_once_blocking(uint8_t *data_to_send, uint32_t len, uint32_t msg_i
             ESP_LOGD(LOG_TAG, "  Sending byte %d, bit %d: %d", by_i, bi_i, current_bit);
             set_addr_and_payload_for_bit(by_i * 8 + bi_i, msg_id, current_bit);
             ESP_LOGD(LOG_TAG, "    resetting. Will now use device address: %02x %02x %02x %02x %02x %02x", rnd_addr[0], rnd_addr[1], rnd_addr[2], rnd_addr[3], rnd_addr[4], rnd_addr[5]);
-            delay(100);
             reset_advertising();
+            delay(5);
         }
     }
     esp_ble_gap_stop_advertising();
@@ -258,7 +264,6 @@ void loop()
     static uint8_t data_to_send[] = "hzgl";
     uint32_t current_message_id = 0;
     send_data_once_blocking(data_to_send, sizeof(data_to_send), current_message_id);
-    esp_ble_gap_stop_advertising();
 
     delay(5000);
 }
