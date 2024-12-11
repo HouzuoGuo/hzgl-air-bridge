@@ -1,4 +1,4 @@
-package main
+package crypt
 
 import (
 	"crypto/aes"
@@ -6,12 +6,8 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/binary"
-	"flag"
-	"fmt"
 	"math/big"
-	"os"
 	"time"
 )
 
@@ -31,7 +27,7 @@ type FindMyLocationReport struct {
 	Confidence uint8
 }
 
-func DecryptReport(report FindMyReport, key []byte) (*FindMyLocationReport, error) {
+func DecryptReport(report FindMyReport, locationPrivateKey []byte) (*FindMyLocationReport, error) {
 	curve := elliptic.P224()
 	payloadData := report.Payload
 	ephemeralKeyBytes := payloadData[len(payloadData)-16-10-57 : len(payloadData)-16-10]
@@ -39,7 +35,7 @@ func DecryptReport(report FindMyReport, key []byte) (*FindMyLocationReport, erro
 	tag := payloadData[len(payloadData)-16:]
 	decodeTimeAndConfidence(payloadData, &report)
 	privateKey := new(ecdsa.PrivateKey)
-	privateKey.D = new(big.Int).SetBytes(key)
+	privateKey.D = new(big.Int).SetBytes(locationPrivateKey)
 	privateKey.PublicKey.Curve = curve
 	x, y := elliptic.Unmarshal(curve, ephemeralKeyBytes)
 	ephemeralPublicKey := &ecdsa.PublicKey{Curve: curve, X: x, Y: y}
@@ -104,27 +100,15 @@ func kdf(secret, ephemeralKey []byte) []byte {
 	return hash.Sum(nil)
 }
 
-func base64Decode(in string) []byte {
-	decodedBytes, err := base64.StdEncoding.DecodeString(in)
-	if err != nil {
-		panic(err)
+func IsValidPubkey(pubKeyCompressed []byte) bool {
+	withSignByte := append([]byte{0x02}, pubKeyCompressed...)
+	curve := elliptic.P224()
+	x, y := elliptic.UnmarshalCompressed(curve, withSignByte)
+	if x == nil || y == nil {
+		return false
 	}
-	return decodedBytes
-}
-
-func main() {
-	var privateKeyBase64, encryptedPayloadBase64 string
-	flag.StringVar(&privateKeyBase64, "privkey", "", "the base64-encoded private key, as stored in output/*.keys (the text file).")
-	flag.StringVar(&encryptedPayloadBase64, "encpayload", "", `the base64-encoded encrypted payload, as retrieved via: curl -X POST --data '{"ids":["hashed-adv-key-base64"],"days":1}' localhost:6176`)
-	flag.Parse()
-
-	if privateKeyBase64 == "" || encryptedPayloadBase64 == "" {
-		flag.PrintDefaults()
-		os.Exit(1)
+	if !curve.IsOnCurve(x, y) {
+		return false
 	}
-	rep, err := DecryptReport(FindMyReport{Payload: base64Decode(encryptedPayloadBase64)}, base64Decode(privateKeyBase64))
-	if err != nil {
-		panic(err)
-	}
-	fmt.Printf("%+v", *rep)
+	return true
 }
