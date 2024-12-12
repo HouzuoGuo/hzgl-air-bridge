@@ -19,6 +19,10 @@
 #include "pubkey.h"
 #include "uECC.h"
 
+static const int BEACON_TRANSMISSION_MS = 4;
+
+static int loop_round = 0;
+
 static const char *LOG_TAG = "hzgl-air-bridge";
 
 #define CHECK_BIT(var, pos) ((var) & (1 << (7 - pos)))
@@ -213,8 +217,23 @@ void send_data_once_blocking(uint8_t *data_to_send, uint32_t len, uint32_t msg_i
             set_addr_and_payload_for_bit(by_i * 8 + bi_i, msg_id, current_bit);
             ESP_LOGD(LOG_TAG, "    resetting. Will now use device address: %02x %02x %02x %02x %02x %02x", rnd_addr[0], rnd_addr[1], rnd_addr[2], rnd_addr[3], rnd_addr[4], rnd_addr[5]);
             reset_advertising();
-            delay(5);
+            delay(BEACON_TRANSMISSION_MS);
         }
+    }
+    esp_ble_gap_stop_advertising();
+}
+
+void send_location_once_blocking()
+{
+    ESP_LOGI(LOG_TAG, "beaconing location");
+    set_addr_from_key(rnd_addr, public_key);
+    set_payload_from_key(adv_data, public_key);
+    for (int i = 0; i < 2; i++)
+    {
+        set_addr_from_key(rnd_addr, public_key);
+        set_payload_from_key(adv_data, public_key);
+        reset_advertising();
+        delay(BEACON_TRANSMISSION_MS);
     }
     esp_ble_gap_stop_advertising();
 }
@@ -236,9 +255,6 @@ void setup(void)
     ESP_ERROR_CHECK(esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, ESP_PWR_LVL_P9));
     ESP_LOGI(LOG_TAG, "bluedroid initialised");
 
-    set_addr_from_key(rnd_addr, public_key);
-    set_payload_from_key(adv_data, public_key);
-
     ESP_LOGI(LOG_TAG, "using device address: %02x %02x %02x %02x %02x %02x", rnd_addr[0], rnd_addr[1], rnd_addr[2], rnd_addr[3], rnd_addr[4], rnd_addr[5]);
 
     esp_err_t status;
@@ -248,22 +264,24 @@ void setup(void)
         return;
     }
 
-    static uint8_t data_to_send[] = "hzgl";
-    uint32_t current_message_id = 0;
-    ESP_LOGI(LOG_TAG, "Sending initial default message: %s", data_to_send);
-    send_data_once_blocking(data_to_send, sizeof(data_to_send), current_message_id);
-
     reset_advertising();
     ESP_LOGI(LOG_TAG, "application initialized");
 }
 
 void loop()
 {
-    ESP_LOGI(LOG_TAG, "still alive");
-
-    static uint8_t data_to_send[] = "hzgl";
-    uint32_t current_message_id = 0;
-    send_data_once_blocking(data_to_send, sizeof(data_to_send), current_message_id);
+    if (loop_round++ % 2 == 0)
+    {
+        ESP_LOGI(LOG_TAG, "beaconing data round %d", loop_round);
+        static uint8_t data_to_send[] = "hzgl";
+        uint32_t current_message_id = 0;
+        send_data_once_blocking(data_to_send, sizeof(data_to_send), current_message_id);
+    }
+    else
+    {
+        ESP_LOGI(LOG_TAG, "beaconing location round %d", loop_round);
+        send_location_once_blocking();
+    }
 
     delay(5000);
 }
