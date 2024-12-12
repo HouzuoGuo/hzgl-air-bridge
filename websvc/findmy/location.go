@@ -16,11 +16,16 @@ import (
 
 // DecryptedLocation represents a location report encrypted by an Apple device
 type DecryptedLocation struct {
-	Latitude          float64
-	Longitude         float64
-	AccuracyMetres    byte
+	// Latitude in decimal degrees, positive is north and negative is south.
+	Latitude float64
+	// Longitude in decimal degrees, positive is east and negative is east.
+	Longitude float64
+	// AccuracyMetres is the self-reported location accuracy of the apple device which heard the beacon.
+	AccuracyMetres byte
+	// ConfidencePercent appears to fluctuate between 0-3 for accuracy < 150 metres. I am uncertain what the percentage means.
 	ConfidencePercent byte
-	Timestamp         time.Time
+	// Timestamp is the wall clock reported by the apple device which heard the beacon.
+	Timestamp time.Time
 }
 
 // DecryptReport decrypts the encrypted payload of a location report.

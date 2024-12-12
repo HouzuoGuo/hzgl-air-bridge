@@ -34,7 +34,7 @@ func main() {
 
 	data := make([]*findmy.DataByte, 0, 4)
 	for i := 0; i < 4; i++ {
-		by, err := client.DownloadDataByte(context.Background(), 0, i, 2, 60*time.Minute)
+		by, err := client.DownloadDataByte(context.Background(), 0, i, 2, 600*time.Minute)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -45,7 +45,7 @@ func main() {
 		log.Printf("data byte %d: %c %+v", i, d.Value, d)
 	}
 
-	loc, err := client.DownloadLocation(context.Background(), 5)
+	loc, err := client.DownloadLocation(context.Background(), 2)
 	if err != nil {
 		log.Fatal(err)
 	}
