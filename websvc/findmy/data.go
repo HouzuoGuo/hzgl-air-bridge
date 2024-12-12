@@ -1,104 +1,115 @@
 package findmy
 
 import (
-	"bytes"
+	"context"
 	"encoding/binary"
-	"encoding/json"
-	"io"
-	"log"
-	"net/http"
+	"fmt"
+	"time"
 
-	"github.com/HouzuoGuo/hzgl-air-bridge/websvc/crypt"
 	"github.com/HouzuoGuo/hzgl-air-bridge/websvc/util"
 )
 
-func (client *FindMyClient) advertisementPublicKey(bitIndex int, messageID int, guessBit bool) (attempt int, ret []byte) {
+// DataByte represents a byte of data retrieved from Find My network.
+// Note that bits are transmitted independently from each other and will arrive out of order.
+type DataByte struct {
+	// Value is the byte value, assembled from reports of individually retrieved bits.
+	Value byte
+	// ReportTime is the timestamp of the latest bit retrieved across the byte.
+	ReportTime time.Time
+	// BitReportSpread is the maximum spread (latest - oldest) of the report representing each bit.
+	BitReportSpread time.Duration
+	// BitReport is the retrieved FindMy location report correspoding to each bit in big endian (most significant first).
+	BitReport []ReportResponse
+}
+
+// dataAdvertPublicKey returns a public key constructed for a bit value guess (e.g. the 3rd bit of message 10 is true) .
+func (client *Client) dataAdvertPublicKey(messageID int, guessBitIndex int, guessBitValue bool) (attempt int, ret []byte) {
+	// See firmware/src/main.cpp for the technique of encoding data in the public key portion of the beacon payload.
 	ret = make([]byte, 28)
 	copy(ret, client.DataPrefixMagic)
-	binary.BigEndian.PutUint32(ret[2:], uint32(bitIndex))
+	binary.BigEndian.PutUint32(ret[2:], uint32(guessBitIndex))
 	binary.BigEndian.PutUint32(ret[6:], uint32(messageID))
 	copy(ret[10:], client.DataModemID)
-	if guessBit {
+	if guessBitValue {
 		ret[27] = 1
 	}
-	for attempt = 0; attempt < 100; attempt++ {
+	// Some public keys constructed by the template above are invalid. Manipulate the attempt number bytes to find a valid public key.
+	for attempt = 0; attempt < 500; attempt++ {
 		binary.BigEndian.PutUint32(ret[14:], uint32(attempt))
-		if crypt.IsValidPubkey(ret) {
+		if util.IsValidPubkey(ret) {
 			return
 		}
 	}
 	return 0, nil
 }
 
-func (client *FindMyClient) DownloadByte(messageID int, byteIndex int) byte {
-	// Retrieve one byte at a time.
+// DownloadDataByte retrieves a data byte for the specified message ID and byte index.
+// It jjjj
+// maxBitReportSpread defines the maximum time between updates of the byte. It prevents incidental retrieval of outdated bits.
+func (client *Client) DownloadDataByte(ctx context.Context, messageID, byteIndex, lookBackDays int, maxBitReportSpread time.Duration) (*DataByte, error) {
 	bitTrueID := make(map[int]string)
 	bitFalseID := make(map[int]string)
 	var trueAndFalseIds []string
 	for bi := byteIndex * 8; bi < (byteIndex+1)*8; bi++ {
-		log.Printf("downloading bit %d", bi)
-		_, bitTrueKey := client.advertisementPublicKey(bi, messageID, true)
+		// Construct a public key to guess that the bit has true value.
+		_, bitTrueKey := client.dataAdvertPublicKey(messageID, bi, true)
 		if bitTrueKey == nil {
-			log.Fatalf("key calculation failure byte %d bit %d", byteIndex, bi)
+			return nil, fmt.Errorf("failed to calculate the advertisement public key for message ID %d, byte index %d, bit true", messageID, byteIndex)
 		}
 		trueAdvertisementID, err := util.HashedBeacon(bitTrueKey)
 		if err != nil {
-			log.Fatalf("true key beacon err byte %d bit %d err %v", byteIndex, bi, err)
+			return nil, fmt.Errorf("failed to calculate the advertisement public key for message ID %d, byte index %d, bit true, err: %w", messageID, byteIndex, err)
 		}
 		bitTrueID[bi] = trueAdvertisementID
-
-		_, bitFalseKey := client.advertisementPublicKey(bi, messageID, false)
+		// Construct a public key to guess that the bit has false value.
+		_, bitFalseKey := client.dataAdvertPublicKey(messageID, bi, false)
 		if bitFalseKey == nil {
-			log.Fatalf("key calculation failure byte %d bit %d", byteIndex, bi)
+			return nil, fmt.Errorf("failed to calculate the advertisement public key for message ID %d, byte index %d, bit false", messageID, byteIndex)
 		}
 		falseAdvertisementID, err := util.HashedBeacon(bitFalseKey)
 		if err != nil {
-			log.Fatalf("false key beacon err byte %d bit %d err %v", byteIndex, bi, err)
+			return nil, fmt.Errorf("failed to calculate the advertisement public key for message ID %d, byte index %d, bit false, err: %w", messageID, byteIndex, err)
 		}
 		bitFalseID[bi] = falseAdvertisementID
 		trueAndFalseIds = append(trueAndFalseIds, trueAdvertisementID)
 		trueAndFalseIds = append(trueAndFalseIds, falseAdvertisementID)
 	}
-	// Retrieve the preports of all IDs simultaneously.
-	reportReq := MultiReportRequest{
-		HashedAdvertisementKeyIds: trueAndFalseIds,
-		Days:                      1,
-	}
-	reportReqBody, err := json.Marshal(reportReq)
+	// Request location reports from Find My network for all the true & false guesses.
+	multiReportResp, err := client.doReportRequest(ctx, MultiReportRequest{HashedAdvertisedPublicKey: trueAndFalseIds, Days: lookBackDays})
 	if err != nil {
-		log.Fatalf("req serialisation err: %v", err)
+		return nil, fmt.Errorf("failed to execute location report http request: %w", err)
 	}
-	httpReq, err := http.NewRequest(http.MethodPost, client.LocationReportHttpAddress, bytes.NewReader(reportReqBody))
-	if err != nil {
-		log.Fatalf("http req err %v", err)
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	var multiReportResp MultiReportResponse
-	resp, err := http.DefaultClient.Do(httpReq)
-	if err != nil {
-		log.Fatalf("http resp err %v", err)
-	}
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatalf("http resp read err %v", err)
-	}
-	err = json.Unmarshal(respBody, &multiReportResp)
-	if err != nil {
-		log.Fatalf("http resp unmarshal err %v", err)
-	}
-	// Determine which bits have been seen.
+	// Correspond the retrieved reports to each bit guess, and thus recover the byte value.
 	reportByID := multiReportResp.ToMap()
 	resultBits := make([]byte, 0, 8)
+	oldestReportMillis := time.Now().UnixMilli()
+	latestReportMillis := int64(0)
+	bitReport := make([]ReportResponse, 8)
 	for i := byteIndex * 8; i < (byteIndex+1)*8; i++ {
+		// To recover the bit value, check whether the true guess or the false guess comes back with a location report.
 		if rep, exists := reportByID[bitTrueID[i]]; exists {
-			log.Printf("byte %d bit %d is 1: %+v", byteIndex, i, rep)
+			bitReport[i-byteIndex*8] = rep
 			resultBits = append(resultBits, 1)
+			if rep.DatePublishedUnixMillis < oldestReportMillis {
+				oldestReportMillis = rep.DatePublishedUnixMillis
+			} else if rep.DatePublishedUnixMillis > latestReportMillis {
+				latestReportMillis = rep.DatePublishedUnixMillis
+			}
 		} else if rep, exists := reportByID[bitFalseID[i]]; exists {
-			log.Printf("byte %d bit %d is 0: %+v", byteIndex, i, rep)
+			bitReport[i-byteIndex*8] = rep
 			resultBits = append(resultBits, 0)
 		} else {
-			log.Fatalf("failed to retrieve byte %d bit %d", byteIndex, i)
+			return nil, fmt.Errorf("no location report retrieved for message ID %d, byte index %d, bit index %d, try again in 10 minutes?", messageID, byteIndex, i)
 		}
 	}
-	return util.BigEndianBitsToByte(resultBits)
+	by := &DataByte{
+		Value:           util.BigEndianBitsToByte(resultBits),
+		ReportTime:      time.UnixMilli(latestReportMillis),
+		BitReportSpread: time.Duration(latestReportMillis-oldestReportMillis) * time.Millisecond,
+		BitReport:       bitReport,
+	}
+	if by.BitReportSpread > maxBitReportSpread {
+		return nil, fmt.Errorf("the bit report time spread is high, the byte value likely contains outdated bits: %+v", by)
+	}
+	return by, nil
 }
