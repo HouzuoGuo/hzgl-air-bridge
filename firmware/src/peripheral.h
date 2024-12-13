@@ -6,10 +6,12 @@ static const int I2C_FREQUENCY_HZ = 100000;
 bool i2c_init();
 
 static const int BME280_I2C_ADDR = 0x76;
+static const int BME280_TASK_LOOP_INTERVAL_MILLIS = 1000;
 bool bme280_init();
-void bme280_loop();
+void bme280_task_fun(void *_);
 
 static const int OLED_I2C_ADDR = 0x3c;
 static const int OLED_FONT_HEIGHT_PX = 10;
+static const int OLED_TASK_LOOP_INTERVAL_MILLIS = 1000;
 bool oled_init();
-void oled_loop();
+void oled_task_fun(void *_);

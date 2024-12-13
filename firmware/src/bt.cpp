@@ -1,4 +1,6 @@
 #include <Arduino.h>
+#include <freertos/FreeRTOS.h>
+#include <esp_task_wdt.h>
 #include <esp_log.h>
 #include <string.h>
 
@@ -37,6 +39,43 @@ uint8_t bt_advert_data[31] = {
     0x00, /* First two bits */
     0x00, /* Hint (0x00) */
 };
+
+void bt_init()
+{
+    ESP_LOGI(LOG_TAG, "initialising bluetooth");
+    ESP_ERROR_CHECK(esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT));
+    esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_bt_controller_init(&bt_cfg));
+    ESP_ERROR_CHECK(esp_bt_controller_enable(ESP_BT_MODE_BLE));
+    ESP_ERROR_CHECK(esp_bluedroid_init());
+    ESP_ERROR_CHECK(esp_bluedroid_enable());
+    ESP_ERROR_CHECK(esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, ESP_PWR_LVL_P9));
+    ESP_ERROR_CHECK(esp_ble_gap_register_callback(bt_esp_gap_cb));
+    ESP_LOGI(LOG_TAG, "bluetooth initialised successfully");
+}
+
+void bt_task_fun(void *_)
+{
+    while (true)
+    {
+        // Alternative between location and data beacons.
+        if (loop_round++ % 2 == 0)
+        {
+            ESP_LOGI(LOG_TAG, "beaconing data in round %d", loop_round);
+            static uint8_t data_to_send[] = "hzgl";
+            uint32_t current_message_id = 0;
+            bt_send_data_once_blocking(data_to_send, sizeof(data_to_send), current_message_id);
+        }
+        else
+        {
+            ESP_LOGI(LOG_TAG, "beaconing location in round %d", loop_round);
+            bt_send_location_once_blocking();
+        }
+    next:
+        esp_task_wdt_reset();
+        vTaskDelay(pdMS_TO_TICKS(BT_TASK_LOOP_INTERVAL_MILLIS));
+    }
+}
 
 void bt_esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
 {
@@ -131,21 +170,17 @@ void bt_set_addr_and_payload_for_bit(uint32_t index, uint32_t msg_id, uint8_t bi
 
 void bt_send_data_once_blocking(uint8_t *data_to_send, uint32_t len, uint32_t msg_id)
 {
-    uint8_t current_bit = 0;
     for (int byte_index = 0; byte_index < len; byte_index++)
     {
         for (int bit_index = 0; bit_index < 8; bit_index++)
         {
+            uint8_t bit_value = 0;
             if (IS_BIT_SET(data_to_send[byte_index], bit_index))
             {
-                current_bit = 1;
+                bit_value = 1;
             }
-            else
-            {
-                current_bit = 0;
-            }
-            ESP_LOGI(LOG_TAG, "beaconing data message id %d byte %d bit %d: %d", msg_id, byte_index, bit_index);
-            bt_set_addr_and_payload_for_bit(byte_index * 8 + bit_index, msg_id, current_bit);
+            ESP_LOGI(LOG_TAG, "beaconing data message id %d byte %d bit %d: %d", msg_id, byte_index, bit_index, bit_value);
+            bt_set_addr_and_payload_for_bit(byte_index * 8 + bit_index, msg_id, bit_value);
             bt_set_phy_addr_and_advert_data();
             delay(BT_BEACON_IX_MS);
         }
@@ -166,34 +201,4 @@ void bt_send_location_once_blocking()
         delay(BT_BEACON_IX_MS);
     }
     esp_ble_gap_stop_advertising();
-}
-
-void bt_init()
-{
-    ESP_LOGI(LOG_TAG, "initialising bluetooth");
-    ESP_ERROR_CHECK(esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT));
-    esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_bt_controller_init(&bt_cfg));
-    ESP_ERROR_CHECK(esp_bt_controller_enable(ESP_BT_MODE_BLE));
-    ESP_ERROR_CHECK(esp_bluedroid_init());
-    ESP_ERROR_CHECK(esp_bluedroid_enable());
-    ESP_ERROR_CHECK(esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, ESP_PWR_LVL_P9));
-    ESP_ERROR_CHECK(esp_ble_gap_register_callback(bt_esp_gap_cb));
-    ESP_LOGI(LOG_TAG, "bluetooth initialised successfully");
-}
-
-void bt_loop()
-{
-    if (loop_round++ % 2 == 0)
-    {
-        ESP_LOGI(LOG_TAG, "beaconing data in round %d", loop_round);
-        static uint8_t data_to_send[] = "hzgl";
-        uint32_t current_message_id = 0;
-        bt_send_data_once_blocking(data_to_send, sizeof(data_to_send), current_message_id);
-    }
-    else
-    {
-        ESP_LOGI(LOG_TAG, "beaconing location in round %d", loop_round);
-        bt_send_location_once_blocking();
-    }
 }

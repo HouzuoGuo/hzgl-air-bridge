@@ -1,5 +1,7 @@
 #include <SSD1306Wire.h>
 #include <Adafruit_BME280.h>
+#include <esp_task_wdt.h>
+#include <freertos/FreeRTOS.h>
 #include "peripheral.h"
 
 static const char LOG_TAG[] = __FILE__;
@@ -50,17 +52,23 @@ bool oled_init()
     return true;
 }
 
-void oled_loop()
+void oled_task_fun(void *_)
 {
-    if (!oled_avail)
+    while (true)
     {
-        return;
+        if (!oled_avail)
+        {
+            goto next;
+        }
+        oled.drawStringMaxWidth(0, 0 * OLED_FONT_HEIGHT_PX, 200, "hi line 0");
+        oled.drawStringMaxWidth(0, 1 * OLED_FONT_HEIGHT_PX, 200, "hi line 1");
+        oled.drawStringMaxWidth(0, 2 * OLED_FONT_HEIGHT_PX, 200, "hi line 2");
+        oled.drawStringMaxWidth(0, 3 * OLED_FONT_HEIGHT_PX, 200, "hi line 3");
+        oled.display();
+    next:
+        esp_task_wdt_reset();
+        vTaskDelay(pdMS_TO_TICKS(OLED_TASK_LOOP_INTERVAL_MILLIS));
     }
-    oled.drawStringMaxWidth(0, 0 * OLED_FONT_HEIGHT_PX, 200, "hi line 0");
-    oled.drawStringMaxWidth(0, 1 * OLED_FONT_HEIGHT_PX, 200, "hi line 1");
-    oled.drawStringMaxWidth(0, 2 * OLED_FONT_HEIGHT_PX, 200, "hi line 2");
-    oled.drawStringMaxWidth(0, 3 * OLED_FONT_HEIGHT_PX, 200, "hi line 3");
-    oled.display();
 }
 
 bool bme280_init()
@@ -72,14 +80,20 @@ bool bme280_init()
         return false;
     }
 
-    ESP_LOGI(LOG_TAG, "successfully initialised bme280, initial temperature %.2fc, humidity %.2f%%, pressure %.2f hpa", bme280.readTemperature(), bme280.readHumidity(), bme280.readPressure()/100);
+    ESP_LOGI(LOG_TAG, "successfully initialised bme280, initial temperature %.2fc, humidity %.2f%%, pressure %.2f hpa", bme280.readTemperature(), bme280.readHumidity(), bme280.readPressure() / 100);
     return true;
 }
 
-void bme280_loop()
+void bme280_task_fun(void *_)
 {
-    if (!bme280_avail)
+    while (true)
     {
-        return;
+        if (!bme280_avail)
+        {
+            goto next;
+        }
+    next:
+        esp_task_wdt_reset();
+        vTaskDelay(pdMS_TO_TICKS(BME280_TASK_LOOP_INTERVAL_MILLIS));
     }
 }
