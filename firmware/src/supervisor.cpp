@@ -47,13 +47,13 @@ void supervisor_init()
 
     // A numerically higher number enjoys higher runtime priority.
     unsigned long priority = tskIDLE_PRIORITY;
-    xTaskCreatePinnedToCore(bt_task_fun, "bt_task_loop", 16 * 1024, NULL, priority++, &bt_task, 1);
+    xTaskCreate(bt_task_fun, "bt_task_loop", 16 * 1024, NULL, priority++, &bt_task);
     ESP_ERROR_CHECK(esp_task_wdt_add(bt_task));
-    xTaskCreatePinnedToCore(bme280_task_fun, "bme280_task_loop", 16 * 1024, NULL, priority++, &bme280_task, 1);
+    xTaskCreate(bme280_task_fun, "bme280_task_loop", 16 * 1024, NULL, priority++, &bme280_task);
     ESP_ERROR_CHECK(esp_task_wdt_add(bme280_task));
-    xTaskCreatePinnedToCore(oled_task_fun, "oled_task_loop", 16 * 1024, NULL, priority++, &oled_task, 1);
+    xTaskCreate(oled_task_fun, "oled_task_loop", 16 * 1024, NULL, priority++, &oled_task);
     ESP_ERROR_CHECK(esp_task_wdt_add(oled_task));
-    xTaskCreatePinnedToCore(supervisor_task_fun, "supervisor_task_loop", 16 * 1024, NULL, priority++, &supervisor_task, 1);
+    xTaskCreate(supervisor_task_fun, "supervisor_task_loop", 16 * 1024, NULL, priority++, &supervisor_task);
     ESP_ERROR_CHECK(esp_task_wdt_add(supervisor_task));
     ESP_LOGI(LOG_TAG, "successfully initialised supervisor");
 }
