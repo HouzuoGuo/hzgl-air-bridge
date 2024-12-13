@@ -1,10 +1,11 @@
 #include <SSD1306Wire.h>
 #include <Adafruit_BME280.h>
+#include <esp_task_wdt.h>
 #include "peripheral.h"
 
 static const char LOG_TAG[] = __FILE__;
-static bool i2c_avail = false, oled_avail = false, bme280_avail = false;
 
+static bool i2c_avail = false, oled_avail = false, bme280_avail = false;
 static SSD1306Wire oled(OLED_I2C_ADDR, -1, -1, GEOMETRY_128_64, I2C_ONE, I2C_FREQUENCY_HZ);
 static Adafruit_BME280 bme280;
 
