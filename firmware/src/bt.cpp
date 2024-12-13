@@ -170,21 +170,19 @@ void bt_send_location_once_blocking()
 
 void bt_init()
 {
+    ESP_LOGI(LOG_TAG, "initialising bluetooth");
     ESP_ERROR_CHECK(esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT));
     esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_bt_controller_init(&bt_cfg));
     ESP_ERROR_CHECK(esp_bt_controller_enable(ESP_BT_MODE_BLE));
-    ESP_LOGI(LOG_TAG, "bluetooth initialised");
-
     ESP_ERROR_CHECK(esp_bluedroid_init());
     ESP_ERROR_CHECK(esp_bluedroid_enable());
     ESP_ERROR_CHECK(esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, ESP_PWR_LVL_P9));
-    ESP_LOGI(LOG_TAG, "bluedroid initialised");
-
     ESP_ERROR_CHECK(esp_ble_gap_register_callback(bt_esp_gap_cb));
+    ESP_LOGI(LOG_TAG, "bluetooth initialised successfully");
 }
 
-void bt_loop_round()
+void bt_loop()
 {
     if (loop_round++ % 2 == 0)
     {

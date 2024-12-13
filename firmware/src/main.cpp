@@ -18,6 +18,7 @@
 
 #include "custom.h"
 #include "bt.h"
+#include "peripheral.h"
 #include "crypt.h"
 #include "uECC.h"
 #include "bt.h"
@@ -31,11 +32,16 @@ void setup(void)
     ESP_LOGI(LOG_TAG, "hzgl-air-bridge is starting up");
     delay(2000);
 
+    i2c_init();
+    oled_init();
+    bme280_init();
     bt_init();
 }
 
 void loop()
 {
-    bt_loop_round();
-    delay(5000);
+    oled_loop();
+    bt_loop();
+    bme280_loop();
+    delay(10000);
 }

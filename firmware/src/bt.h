@@ -15,7 +15,6 @@ const static int BT_BEACON_IX_MS = 4;
 
 // The bluetooth stack callback function for beaconing in generic access profile.
 void bt_esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param);
-// 
 void bt_set_addr_from_key(esp_bd_addr_t addr, const uint8_t *public_key);
 void bt_set_payload_from_key(uint8_t *payload, const uint8_t *public_key);
 void bt_set_phy_addr_and_advert_data();
@@ -24,4 +23,4 @@ void bt_send_data_once_blocking(uint8_t *data_to_send, uint32_t len, uint32_t ms
 void bt_send_location_once_blocking();
 // Initialise bluetooth stack.
 void bt_init();
-void bt_loop_round();
+void bt_loop();
