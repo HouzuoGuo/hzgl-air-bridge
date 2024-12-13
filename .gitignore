@@ -36,3 +36,4 @@ output
 .pio
 .vscode
 provision/output/
+custom.h

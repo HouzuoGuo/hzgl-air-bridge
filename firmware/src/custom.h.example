@@ -1,13 +1,6 @@
-#ifndef PUBKEY_H_
-#define PUBKEY_H_
-
+#pragma once
 #include <stdint.h>
-
-/*
-Come up with 6 bytes of your own.
-This is visible to nearby bluetooth scanners, they matter little to location and data beacons.
-*/
-static esp_bd_addr_t rnd_addr = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06};
+#include <esp_bt_defs.h>
 
 /*
 The public key is only for beaconing location reports, which can be decrypted by a private key.
@@ -15,12 +8,12 @@ It is not used for beaconing data.
 
 To generate the public key and its private key:
 1. Run: provision/genkey.py
-2. Open output/*.keys, copy down the advertisement key.
+2. Open output/something.keys, copy down the advertisement key.
 3. Run: echo -n "advertisement key" | base64 -d | hexdump -C
 Then copy down the 28 bytes of hexdump output below:
 */
 
-static uint8_t public_key[28] = {
+static const uint8_t custom_public_key[28] = {
     0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12,
     0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12,
     0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12,
@@ -29,10 +22,8 @@ static uint8_t public_key[28] = {
 // The parameters below are exclusively used for beaconing data and are unrelated to location reports.
 
 // Come up with 4 random bytes of your own.
-static const uint32_t modem_id = 0x12345678;
+static const uint32_t custom_modem_id = 0x12345678;
 
 // Come up with 2 random bytes of your own.
-static const uint32_t pubkey_magic1 = 0x11;
-static const uint32_t pubkey_magic2 = 0x22;
-
-#endif // PUBKEY_H_
+static const uint32_t custom_pubkey_magic1 = 0x11;
+static const uint32_t custom_pubkey_magic2 = 0x22;
