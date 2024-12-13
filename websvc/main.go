@@ -23,6 +23,12 @@ func main() {
 
 	var reportWebAddress string
 	flag.StringVar(&reportWebAddress, "reportaddr", "http://localhost:6176/", "url of the web service served by docker image hzgl/air-bridge-ws:latest")
+
+	var maxDays int
+	flag.IntVar(&maxDays, "days", 1, "query this many days of location reports in search of locations and data bytes")
+	var maxBitReportSpreadMins int
+	flag.IntVar(&maxBitReportSpreadMins, "spreadmins", 30, "tolerate this many minutes of uncertainty when retrieving data bytes")
+
 	flag.Parse()
 
 	if locPrivKey == "" || locAdvertKey == "" || dataPrefixMagic == "" || dataModemId == "" {
@@ -34,7 +40,7 @@ func main() {
 
 	data := make([]*findmy.DataByte, 0, 4)
 	for i := 0; i < 4; i++ {
-		by, err := client.DownloadDataByte(context.Background(), 0, i, 2, 600*time.Minute)
+		by, err := client.DownloadDataByte(context.Background(), 0, i, maxDays, time.Duration(maxBitReportSpreadMins)*time.Minute)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -45,7 +51,7 @@ func main() {
 		log.Printf("data byte %d: %c %+v", i, d.Value, d)
 	}
 
-	loc, err := client.DownloadLocation(context.Background(), 2)
+	loc, err := client.DownloadLocation(context.Background(), maxDays)
 	if err != nil {
 		log.Fatal(err)
 	}
