@@ -109,7 +109,7 @@ func (client *Client) DownloadDataByte(ctx context.Context, messageID, byteIndex
 		BitReport:       bitReport,
 	}
 	if by.BitReportSpread > maxBitReportSpread {
-		return nil, fmt.Errorf("the bit report time spread is high, the byte value likely contains outdated bits: %+v", by)
+		return nil, fmt.Errorf("the bit report time spread %v exceeds the tolerance %v, the byte value likely contains outdated bits: %+v", by.BitReportSpread, maxBitReportSpread, by)
 	}
 	return by, nil
 }
