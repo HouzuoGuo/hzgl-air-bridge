@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/binary"
 	"fmt"
 )
 
@@ -23,7 +24,7 @@ func HashedBeacon(in []byte) (string, error) {
 	return encodedHash, nil
 }
 
-func BigEndianBitsToByte(bits []byte) byte {
+func ByteFromBits(bits []byte) byte {
 	var ret byte
 	for i, bit := range bits {
 		if bit == 1 {
@@ -39,4 +40,8 @@ func Base64Decode(in string) []byte {
 		panic(err)
 	}
 	return decodedBytes
+}
+
+func TwoBeBytes(in []byte) int {
+	return int(binary.BigEndian.Uint16(in))
 }

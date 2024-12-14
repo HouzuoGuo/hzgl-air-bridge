@@ -103,7 +103,7 @@ func (client *Client) DownloadDataByte(ctx context.Context, messageID, byteIndex
 		}
 	}
 	by := &DataByte{
-		Value:           util.BigEndianBitsToByte(resultBits),
+		Value:           util.ByteFromBits(resultBits),
 		ReportTime:      time.UnixMilli(latestReportMillis),
 		BitReportSpread: time.Duration(latestReportMillis-oldestReportMillis) * time.Millisecond,
 		BitReport:       bitReport,

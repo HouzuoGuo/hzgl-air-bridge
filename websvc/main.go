@@ -38,19 +38,31 @@ func main() {
 
 	client := findmy.NewClient(reportWebAddress, util.Base64Decode(locPrivKey), util.Base64Decode(locAdvertKey), util.Base64Decode(dataPrefixMagic), util.Base64Decode(dataModemId))
 
-	data := make([]*findmy.DataByte, 0, 4)
-	for i := 0; i < 4; i++ {
-		by, err := client.DownloadDataByte(context.Background(), 0, i, maxDays, time.Duration(maxBitReportSpreadMins)*time.Minute)
-		if err != nil {
-			log.Fatal(err)
-		}
-		data = append(data, by)
+	// Message ID 0 - temperature in celcius
+	tempBy, err := client.DownloadDataByte(context.Background(), 0, 0, maxDays, time.Duration(maxBitReportSpreadMins)*time.Minute)
+	if err == nil {
+		log.Printf("ambient temperature: %f, report: %+v", float64(tempBy.Value)/3+40, tempBy)
+	} else {
+		log.Printf("failed to downnload temperature byte: %v", err)
+	}
+	// Message ID 1 - humidity %
+	humidityBy, err := client.DownloadDataByte(context.Background(), 1, 0, maxDays, time.Duration(maxBitReportSpreadMins)*time.Minute)
+	if err == nil {
+		log.Printf("relative humidity: %f%%, report: %+v", float64(humidityBy.Value)/2.55, humidityBy)
+	} else {
+		log.Printf("failed to downnload humidity byte: %v", err)
+	}
+	// Message ID 2 - pressure hpa
+	pressBy1, err1 := client.DownloadDataByte(context.Background(), 2, 0, maxDays, time.Duration(maxBitReportSpreadMins)*time.Minute)
+	pressBy2, err2 := client.DownloadDataByte(context.Background(), 2, 1, maxDays, time.Duration(maxBitReportSpreadMins)*time.Minute)
+	if err1 == nil && err2 == nil {
+		pressIntVal := util.TwoBeBytes([]byte{pressBy1.Value, pressBy2.Value})
+		log.Printf("ambient pressure: %f hpa, report: %+v %+v", float64(pressIntVal)/(65535.0/(1200.0-100.0))+100, pressBy1, pressBy2)
+	} else {
+		log.Printf("failed to downnload pressure bytes: %v %v", err1, err2)
 	}
 
-	for i, d := range data {
-		log.Printf("data byte %d: %c %+v", i, d.Value, d)
-	}
-
+	// Grab the location reports too.
 	loc, err := client.DownloadLocation(context.Background(), maxDays)
 	if err != nil {
 		log.Fatal(err)
