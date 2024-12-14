@@ -13,7 +13,7 @@ To generate the public key and its private key:
 Then copy down the 28 bytes of hexdump output below:
 */
 
-static const uint8_t custom_public_key[28] = {
+const uint8_t custom_public_key[28] = {
     0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12,
     0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12,
     0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12,
@@ -22,8 +22,8 @@ static const uint8_t custom_public_key[28] = {
 // The parameters below are exclusively used for beaconing data and are unrelated to location reports.
 
 // Come up with 4 random bytes of your own.
-static const uint32_t custom_modem_id = 0x12345678;
+const uint32_t custom_modem_id = 0x12345678;
 
 // Come up with 2 random bytes of your own.
-static const uint32_t custom_pubkey_magic1 = 0x11;
-static const uint32_t custom_pubkey_magic2 = 0x22;
+const uint32_t custom_pubkey_magic1 = 0x11;
+const uint32_t custom_pubkey_magic2 = 0x22;

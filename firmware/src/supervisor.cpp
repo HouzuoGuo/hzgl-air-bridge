@@ -2,7 +2,9 @@
 #include <esp_sleep.h>
 #include <esp_log.h>
 #include <Esp.h>
-#include "peripheral.h"
+#include "i2c.h"
+#include "bme280.h"
+#include "oled.h"
 #include "supervisor.h"
 #include "bt.h"
 
@@ -63,7 +65,6 @@ void supervisor_task_fun(void *_)
     while (true)
     {
         supervisor_health_check();
-    next:
         esp_task_wdt_reset();
         vTaskDelay(pdMS_TO_TICKS(SUPERVISOR_TASK_LOOP_INTERVAL_MILLIS));
     }

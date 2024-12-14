@@ -6,12 +6,24 @@
 
 #include "custom.h"
 #include "crypt.h"
+#include "bme280.h"
 #include "bt.h"
 
 #define IS_BIT_SET(var, pos) ((var) & (1 << (7 - pos)))
 
 static const char LOG_TAG[] = __FILE__;
-static int loop_round = 0;
+
+uint8_t bt_iter_data[2] = {0};
+bt_iter_snapshot bt_iter = {
+    .num = -1,
+    .data = {0},
+    .bme280 = {
+        .temp_celcius = 0,
+        .humidity_percent = 0,
+        .pressure_hpa = 0,
+        .altitude_masl = 0,
+    },
+};
 
 // The beacon functions will reset the device address.
 esp_bd_addr_t bt_dev_addr = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
@@ -58,18 +70,24 @@ void bt_task_fun(void *_)
 {
     while (true)
     {
+        bt_update_iter_snapshot();
         // Alternative between location and data beacons.
-        if (loop_round++ % 2 == 0)
+        switch (bt_get_tx_iter_num())
         {
-            ESP_LOGI(LOG_TAG, "beaconing data in round %d", loop_round);
-            static uint8_t data_to_send[] = "hzgl";
-            uint32_t current_message_id = 0;
-            bt_send_data_once_blocking(data_to_send, sizeof(data_to_send), current_message_id);
-        }
-        else
-        {
-            ESP_LOGI(LOG_TAG, "beaconing location in round %d", loop_round);
+        case BT_TX_ITER_TEMP:
+            bt_send_data_bme280_temp_blocking();
+            break;
+        case BT_TX_ITER_HUMID:
+            bt_send_data_bme280_humid_blocking();
+            break;
+        case BT_TX_ITER_PRESS:
+            bt_send_data_bme280_press_blocking();
+            break;
+        case BT_TX_ITER_LOCATION:
             bt_send_location_once_blocking();
+            break;
+        default:
+            goto next;
         }
     next:
         esp_task_wdt_reset();
@@ -163,7 +181,8 @@ void bt_set_addr_and_payload_for_bit(uint32_t index, uint32_t msg_id, uint8_t bi
         crypt_copy_4b_big_endian(&public_key[14], &pubkey_gen_attempt);
         pubkey_gen_attempt++;
     } while (!crypt_is_valid_pubkey(public_key));
-    ESP_LOGI(LOG_TAG, "data report beacon payload (pubkey gen attempt %d): %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x ... %02x", pubkey_gen_attempt, public_key[0], public_key[1], public_key[2], public_key[3], public_key[4], public_key[5], public_key[6], public_key[7], public_key[8], public_key[9], public_key[10], public_key[11], public_key[12], public_key[13], public_key[14], public_key[15], public_key[16], public_key[17], public_key[19], public_key[19], public_key[20], public_key[21], public_key[22], public_key[23], public_key[24], public_key[25], public_key[26], public_key[27]);
+    ESP_LOGI(LOG_TAG, "data report beacon payload (pubkey gen attempt %d): %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x ... %02x",
+             pubkey_gen_attempt, public_key[0], public_key[1], public_key[2], public_key[3], public_key[4], public_key[5], public_key[6], public_key[7], public_key[8], public_key[9], public_key[10], public_key[11], public_key[12], public_key[13], public_key[14], public_key[15], public_key[16], public_key[17], public_key[19], public_key[19], public_key[20], public_key[21], public_key[22], public_key[23], public_key[24], public_key[25], public_key[26], public_key[27]);
     bt_set_addr_from_key(bt_dev_addr, public_key);
     bt_set_payload_from_key(bt_advert_data, public_key);
 }
@@ -188,6 +207,29 @@ void bt_send_data_once_blocking(uint8_t *data_to_send, uint32_t len, uint32_t ms
     esp_ble_gap_stop_advertising();
 }
 
+int bt_get_tx_iter_num()
+{
+    return (millis() / BT_TX_ITER_DURATION_MILLIS) % BT_TX_TOTAL_ITERS;
+}
+
+void bt_update_iter_snapshot()
+{
+    if (bt_get_tx_iter_num() != bt_iter.num)
+    {
+        bt_iter = {
+            .num = bt_get_tx_iter_num(),
+            .data = {0}, // to be populated by sensor data tx functions
+            .bme280 = {
+                .temp_celcius = bme280_latest.temp_celcius,
+                .humidity_percent = bme280_latest.humidity_percent,
+                .pressure_hpa = bme280_latest.pressure_hpa,
+                .altitude_masl = bme280_latest.altitude_masl,
+            },
+        };
+        memset(bt_iter_data, 0, sizeof(bt_iter_data));
+    }
+}
+
 void bt_send_location_once_blocking()
 {
     ESP_LOGI(LOG_TAG, "beaconing location");
@@ -201,4 +243,81 @@ void bt_send_location_once_blocking()
         delay(BT_BEACON_IX_MS);
     }
     esp_ble_gap_stop_advertising();
+}
+
+void bt_send_data_bme280_temp_blocking()
+{
+    // Encode the ambient temperature between [-40, +45] celcius, step 1/3rd of a celcius.
+    float temp = bt_iter.bme280.temp_celcius;
+    if (temp > 45)
+    {
+        temp = 45;
+    }
+    else if (temp < -40)
+    {
+        temp = -40;
+    }
+    // Offset by the lower boundary and then zoom in to fill up the entire byte.
+    temp += 40;
+    temp *= 3;
+    uint8_t val = uint8_t(temp);
+    ESP_LOGI(LOG_TAG, "beacon round %d is sending temperature byte %02x", bt_iter.num, val);
+    bt_iter.data[0] = val;
+    bt_send_data_once_blocking(bt_iter.data, 1, BT_TX_ITER_TEMP);
+}
+
+void bt_send_data_bme280_humid_blocking()
+{
+    // Encode the ambient relative humidity percent [0, 100], step 0.4%.
+    float humid = bt_iter.bme280.humidity_percent;
+    if (humid > 100)
+    {
+        humid = 100;
+    }
+    else if (humid < 0)
+    {
+        humid = 0;
+    }
+    // Zoom in to fill up the entire byte.
+    humid *= 2.55;
+    uint8_t val = uint8_t(humid);
+    ESP_LOGI(LOG_TAG, "beacon round %d is sending humidity byte %02x", bt_iter.num, val);
+    bt_iter.data[0] = val;
+    bt_send_data_once_blocking(bt_iter.data, 1, BT_TX_ITER_HUMID);
+}
+
+typedef struct
+{
+    uint8_t bytes[2];
+} two_be_bytes;
+
+two_be_bytes data_be2(int val)
+{
+    two_be_bytes ret;
+    // Big endian style.
+    ret.bytes[0] = (val >> 8) & 0xFF;
+    ret.bytes[1] = val & 0xFF;
+    return ret;
+}
+
+void bt_send_data_bme280_press_blocking()
+{
+    // Encode the ambient pressure between 100 hpa (>15000m) and 1200 hpa (<-1000m)
+    float press = bt_iter.bme280.pressure_hpa;
+    if (press > 1200)
+    {
+        press = 1200;
+    }
+    else if (press < 100)
+    {
+        press = 100;
+    }
+    // Offset by the lower boundary and then zoom in to fill up the entire byte.
+    press -= 100;
+    press *= 65535.0 / (1200.0 - 100.0);
+    two_be_bytes press_data = data_be2(int(press));
+    bt_iter.data[0] = press_data.bytes[0];
+    bt_iter.data[1] = press_data.bytes[1];
+    ESP_LOGI(LOG_TAG, "beacon round %d is sending pressure bytes %02x %02x", bt_iter.num, bt_iter.data[0], bt_iter.data[1]);
+    bt_send_data_once_blocking(bt_iter.data, 2, BT_TX_ITER_PRESS);
 }

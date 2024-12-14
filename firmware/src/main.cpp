@@ -19,7 +19,9 @@
 
 #include "custom.h"
 #include "bt.h"
-#include "peripheral.h"
+#include "i2c.h"
+#include "bme280.h"
+#include "oled.h"
 #include "crypt.h"
 #include "supervisor.h"
 #include "uECC.h"
