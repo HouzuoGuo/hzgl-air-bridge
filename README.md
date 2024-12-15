@@ -1,6 +1,6 @@
 # hzgl-air-bridge
 
-WIP: an infrastructure for collecting telemetry data from air-gapped system using Apple Find My network as data carrier.
+Defeat air-gapped systems by exfiltrating data using Apple Find My network.
 
 ## Credits & prior research
 
@@ -15,23 +15,43 @@ This project derives from:
 
 ## Usage instructions
 
-### Generate keys for location reporting
+### 1. Generate keys for location reporting
 
-TODO
+Navigate to `provision/` and run:
 
-### Edit parameters for telemetry data reporting
+``` bash
+> ./genkey.py
+Using python3
+Output will be written to output/
+```
 
-TODO
+### 2. Edit parameters for telemetry data reporting
 
-### Upload beacon firmware
+Navigate to `firmware/src/`, copy `custom.h.example` and rename into custom.h.
 
-TODO
+The file contains parameters for the firmware to beacon both location and data. Follow in-file instructions to change the parameters.
 
-### Launch server infrastructure
+### 3. Upload beacon firmware
 
-TODO
+In Visual Studio Code, install PlatformIO plugin and then open directory `firmwrae/`.
 
-Delete all persisted files (e.g. Apple credentials) and start over:
+Change the serial port in `firmwrae/platformio.ini` to that belongs to your development board, and then execute `PlatformIO: Upload` action.
+
+### 4. Launch server infrastructure
+
+Retrieving Find My location and data reports requires these server programs:
+
+```bash
+docker network create hzgl-air-bridge-network
+docker run -d --restart always --name anisette -p 6969:6969 --volume anisette-data:/home/Alcoholic/.config/anisette-v3/ --network hzgl-air-bridge-network hzgl/anisette-v3-server
+# Username and password input requires an interactive terminal.
+# See https://github.com/HouzuoGuo/macless-haystack for the image build instructions.
+docker run -it --restart unless-stopped --name macless-haystack -p 6176:6176 --volume bridge-data:/app/data/ --network hzgl-air-bridge-network hzgl/air-bridge-ws
+```
+
+#### To start over
+
+If you have to start over, e.g. changing to a different Apple account or having incidentally deleted the fake macbook device from iCloud:
 
 ```bash
 docker ps -aq | xargs docker rm -f
@@ -40,14 +60,21 @@ docker volume rm -f bridge-data
 docker network remove hzgl-air-bridge-network
 ```
 
-Now start the two web servers:
+The procedure deletes all stored apple ID and fake macbook device credentials.
 
-```bash
-docker network create hzgl-air-bridge-network
-docker run -d --restart always --name anisette -p 6969:6969 --volume anisette-data:/home/Alcoholic/.config/anisette-v3/ --network hzgl-air-bridge-network hzgl/anisette-v3-server
-# Username and password input requires an interactive terminal.
-# See https://github.com/HouzuoGuo/macless-haystack for the image build instructions.
-docker run -it --restart unless-stopped --name macless-haystack -p 6176:6176 --volume bridge-data:/app/data/ --network hzgl-air-bridge-network hzgl/air-bridge-ws
+#### 5. Read data and location reports
+
+To retrieve the latest data & location reports, navigate to `websvc/` and run:
+
+``` bash
+go run main.go \
+  -locprivkey='the private key found in output/some.keys file' \
+  -locadvertkey='the advertisement key found in output/some.keys file' \
+  -pubkey1=... \ # The decimal value of custom_pubkey_magic1.
+  -pubkey2=... \ # The decimal value of custom_pubkey_magic2.
+  -modemid=... \ # The decimal value of custom_modem_id.
+  -days=1 \ # Retrieve data and location from this from this many days of historical reports, keep it between 1 and 7.
+  -spreadmins=... # When retrieving data, tolerate this many minutes of spread between each bit of the data byte. 7 (minutes) is good for most cases.
 ```
 
 ## License
