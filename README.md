@@ -74,7 +74,8 @@ go run main.go \
   -pubkey2=... \ # The decimal value of custom_pubkey_magic2.
   -modemid=... \ # The decimal value of custom_modem_id.
   -days=1 \ # Retrieve data and location from this from this many days of historical reports, keep it between 1 and 7.
-  -spreadmins=... # When retrieving data, tolerate this many minutes of spread between each bit of the data byte. 7 (minutes) is good for most cases.
+  -spreadmins=7 \ # When retrieving data, tolerate this many minutes of spread between each bit of the data byte. 7 (minutes) is good for most cases.
+  -reportaddr=http://localhost:6176 # The URL of hzgl/air-bridge-ws container web server.
 ```
 
 ## License
