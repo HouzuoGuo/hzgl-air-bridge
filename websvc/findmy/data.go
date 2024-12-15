@@ -26,10 +26,11 @@ type DataByte struct {
 func (client *Client) dataAdvertPublicKey(messageID int, guessBitIndex int, guessBitValue bool) (attempt int, ret []byte) {
 	// See firmware/src/main.cpp for the technique of encoding data in the public key portion of the beacon payload.
 	ret = make([]byte, 28)
-	copy(ret, client.DataPrefixMagic)
+	ret[0] = byte(client.PubkeyMagic1)
+	ret[1] = byte(client.PubkeyMagic2)
 	binary.BigEndian.PutUint32(ret[2:], uint32(guessBitIndex))
 	binary.BigEndian.PutUint32(ret[6:], uint32(messageID))
-	copy(ret[10:], client.DataModemID)
+	binary.BigEndian.PutUint32(ret[10:], uint32(client.ModemID))
 	if guessBitValue {
 		ret[27] = 1
 	}
@@ -44,7 +45,6 @@ func (client *Client) dataAdvertPublicKey(messageID int, guessBitIndex int, gues
 }
 
 // DownloadDataByte retrieves a data byte for the specified message ID and byte index.
-// It jjjj
 // maxBitReportSpread defines the maximum time between updates of the byte. It prevents incidental retrieval of outdated bits.
 func (client *Client) DownloadDataByte(ctx context.Context, messageID, byteIndex, lookBackDays int, maxBitReportSpread time.Duration) (*DataByte, error) {
 	bitTrueID := make(map[int]string)
@@ -87,19 +87,29 @@ func (client *Client) DownloadDataByte(ctx context.Context, messageID, byteIndex
 	bitReport := make([]ReportResponse, 8)
 	for i := byteIndex * 8; i < (byteIndex+1)*8; i++ {
 		// To recover the bit value, check whether the true guess or the false guess comes back with a location report.
-		if rep, exists := reportByID[bitTrueID[i]]; exists {
-			bitReport[i-byteIndex*8] = rep
-			resultBits = append(resultBits, 1)
-			if rep.DatePublishedUnixMillis < oldestReportMillis {
-				oldestReportMillis = rep.DatePublishedUnixMillis
-			} else if rep.DatePublishedUnixMillis > latestReportMillis {
-				latestReportMillis = rep.DatePublishedUnixMillis
-			}
-		} else if rep, exists := reportByID[bitFalseID[i]]; exists {
-			bitReport[i-byteIndex*8] = rep
-			resultBits = append(resultBits, 0)
-		} else {
+		trueRep, trueExists := reportByID[bitTrueID[i]]
+		falseRep, falseExists := reportByID[bitFalseID[i]]
+		if !trueExists && !falseExists {
 			return nil, fmt.Errorf("no location report retrieved for message ID %d, byte index %d, bit index %d, try again in 10 minutes?", messageID, byteIndex, i)
+		}
+		// The bit value may change within the tolerated spread and result in both false and true reports.
+		// Use the newer report to determine the bit value.
+		var useTrue bool
+		if trueExists && trueRep.DatePublishedUnixMillis > falseRep.DatePublishedUnixMillis {
+			useTrue = true
+		}
+		if useTrue {
+			bitReport[i-byteIndex*8] = trueRep
+			resultBits = append(resultBits, 1)
+		} else {
+			bitReport[i-byteIndex*8] = falseRep
+			resultBits = append(resultBits, 0)
+		}
+		bit := bitReport[i-byteIndex*8]
+		if bit.DatePublishedUnixMillis < oldestReportMillis {
+			oldestReportMillis = bit.DatePublishedUnixMillis
+		} else if bit.DatePublishedUnixMillis > latestReportMillis {
+			latestReportMillis = bit.DatePublishedUnixMillis
 		}
 	}
 	by := &DataByte{

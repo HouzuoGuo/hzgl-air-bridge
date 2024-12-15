@@ -58,18 +58,20 @@ type Client struct {
 	LocationPrivateKey        []byte
 	LocationAdvertisementKey  []byte
 
-	DataPrefixMagic []byte
-	DataModemID     []byte
+	PubkeyMagic1 int
+	PubkeyMagic2 int
+	ModemID      int
 }
 
-func NewClient(reportHttpAddr string, locPrivKey, locAdvertKey, dataPrefixMagic, dataModemID []byte) *Client {
+func NewClient(reportHttpAddr string, locPrivKey, locAdvertKey []byte, pubkeyMagic1, pubkeyMagic2, modemID int) *Client {
 	return &Client{
 		httpClient:                &http.Client{},
 		LocationReportHttpAddress: reportHttpAddr,
 		LocationPrivateKey:        locPrivKey,
 		LocationAdvertisementKey:  locAdvertKey,
-		DataPrefixMagic:           dataPrefixMagic,
-		DataModemID:               dataModemID,
+		PubkeyMagic1:              pubkeyMagic1,
+		PubkeyMagic2:              pubkeyMagic2,
+		ModemID:                   modemID,
 	}
 }
 

@@ -17,9 +17,10 @@ func main() {
 	flag.StringVar(&locPrivKey, "locprivkey", "", "the base64-encoded private key for decrypting location beacons")
 	flag.StringVar(&locAdvertKey, "locadvertkey", "", "the base64-encoded advertisement key for retrieving location beacons, not to be confused with hashed advertisement key!")
 
-	var dataPrefixMagic, dataModemId string
-	flag.StringVar(&dataPrefixMagic, "dataprefix", "", "the base64-encoded 2 prefix bytes for telemetry data transfer")
-	flag.StringVar(&dataModemId, "datamodem", "", "the base64-encoded 4 data modem ID bytes for telemetry data transfer")
+	var pubkeyMagic1, pubkeyMagic2, modemID int
+	flag.IntVar(&pubkeyMagic1, "pubkey1", 0, "the custom_pubkey_magic1 from custom.h, converted from hex to decimal.")
+	flag.IntVar(&pubkeyMagic2, "pubkey2", 0, "the custom_pubkey_magic2 from custom.h, converted from hex to decimal.")
+	flag.IntVar(&modemID, "modemid", 0, "the custom_modem_id from custom.h, converted from hex to decimal.")
 
 	var reportWebAddress string
 	flag.StringVar(&reportWebAddress, "reportaddr", "http://localhost:6176/", "url of the web service served by docker image hzgl/air-bridge-ws:latest")
@@ -31,17 +32,17 @@ func main() {
 
 	flag.Parse()
 
-	if locPrivKey == "" || locAdvertKey == "" || dataPrefixMagic == "" || dataModemId == "" {
+	if locPrivKey == "" || locAdvertKey == "" || pubkeyMagic1 < 1 || pubkeyMagic2 < 1 || modemID < 1 {
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
 
-	client := findmy.NewClient(reportWebAddress, util.Base64Decode(locPrivKey), util.Base64Decode(locAdvertKey), util.Base64Decode(dataPrefixMagic), util.Base64Decode(dataModemId))
+	client := findmy.NewClient(reportWebAddress, util.Base64Decode(locPrivKey), util.Base64Decode(locAdvertKey), pubkeyMagic1, pubkeyMagic2, modemID)
 
 	// Message ID 0 - temperature in celcius
 	tempBy, err := client.DownloadDataByte(context.Background(), 0, 0, maxDays, time.Duration(maxBitReportSpreadMins)*time.Minute)
 	if err == nil {
-		log.Printf("ambient temperature: %f, report: %+v", float64(tempBy.Value)/3+40, tempBy)
+		log.Printf("ambient temperature: %f, report: %+v", float64(tempBy.Value)/3-40, tempBy)
 	} else {
 		log.Printf("failed to downnload temperature byte: %v", err)
 	}
