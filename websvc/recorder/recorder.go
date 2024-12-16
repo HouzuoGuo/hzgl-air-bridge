@@ -146,8 +146,8 @@ func (rec *Recorder) downloadLocation() {
 				Location: rep,
 			})
 			log.Printf("location: %+v", rep)
+			rec.lastLocation = rep.Timestamp
 		}
-		rec.lastLocation = rep.Timestamp
 	}
 }
 
