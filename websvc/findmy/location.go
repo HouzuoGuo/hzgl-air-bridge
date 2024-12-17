@@ -28,6 +28,10 @@ type DecryptedLocation struct {
 	Timestamp time.Time
 }
 
+func (loc *DecryptedLocation) Valid() bool {
+	return loc.AccuracyMetres > 0
+}
+
 // DecryptReport decrypts the encrypted payload of a location report.
 // Apple device encrypts its own location by the public key broadcast by a bluetooth beacon, and uploads the encrypted location report to Apple.
 func (client *Client) DecryptReport(report ReportResponse, locationPrivateKey []byte) (DecryptedLocation, error) {

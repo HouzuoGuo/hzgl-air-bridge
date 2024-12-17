@@ -68,15 +68,38 @@ To retrieve the latest data & location reports, navigate to `websvc/` and run:
 
 ``` bash
 go run main.go \
+  # Common reporting parameters.
+  -days=1 \ # Retrieve data and location from this from this many days of historical reports, keep it between 1 and 7.
+  -spreadmins=20 \ # When retrieving data, tolerate this many minutes of spread between each bit of the data byte. 20 minutes is good for most cases.
+  -airbridgews=http://localhost:6176 \ # The URL of hzgl/air-bridge-ws container web server.
+
+  # Location reporting parameters.
   -locprivkey='the private key found in output/some.keys file' \
   -locadvertkey='the advertisement key found in output/some.keys file' \
+
+  # Data reporting parameters.
   -pubkey1=... \ # The decimal value of custom_pubkey_magic1.
   -pubkey2=... \ # The decimal value of custom_pubkey_magic2.
   -modemid=... \ # The decimal value of custom_modem_id.
-  -days=1 \ # Retrieve data and location from this from this many days of historical reports, keep it between 1 and 7.
-  -spreadmins=7 \ # When retrieving data, tolerate this many minutes of spread between each bit of the data byte. 7 (minutes) is good for most cases.
-  -reportaddr=http://localhost:6176 # The URL of hzgl/air-bridge-ws container web server.
+
+  # Save all reports to this file.
+  -file=/tmp/hzgl-air-bridge.json
 ```
+
+Leave it running, and it will download location and data reports at a regular interval.
+
+A built-in web server provides a lightweight frontend to view the reports:
+
+``` bash
+...
+  # Save all reports to this file.
+  -file=/tmp/hzgl-air-bridge.json \
+  -webaddress=localhost \
+  -webport=34681 \
+  -webhandler=/air-bridge
+```
+
+<img src="https://raw.githubusercontent.com/HouzuoGuo/hzgl-air-bridge/refs/heads/master/web-demo.png" />
 
 ## License
 

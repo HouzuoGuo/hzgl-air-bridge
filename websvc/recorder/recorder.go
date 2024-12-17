@@ -13,9 +13,6 @@ import (
 	"github.com/HouzuoGuo/hzgl-air-bridge/websvc/util"
 )
 
-type Records struct {
-}
-
 type Record struct {
 	TemperatureC float64                  `json:"temp_c,omitempty"`
 	HumidityPct  float64                  `json:"humidity_pct,omitempty"`
@@ -38,7 +35,7 @@ type Recorder struct {
 	lastLocation time.Time
 }
 
-func New(fileName string, client *findmy.Client, maxDays int, maxBitReportSpread time.Duration) (rec Recorder, err error) {
+func New(fileName string, client *findmy.Client, maxDays int, maxBitReportSpread time.Duration) (rec *Recorder, err error) {
 	content, err := os.ReadFile(fileName)
 	if err == nil {
 		if err = json.Unmarshal(content, &rec); err != nil {
@@ -57,13 +54,13 @@ func New(fileName string, client *findmy.Client, maxDays int, maxBitReportSpread
 		if rep.TemperatureC != 0 && rep.Time.After(rec.lastTemp) {
 			rec.lastTemp = rep.Time
 		}
-		if rep.PressureHpa != 0 && rep.Time.After(rec.lastHumidity) {
+		if rep.PressureHpa != 0 && rep.Time.After(rec.lastPressure) {
 			rec.lastPressure = rep.Time
 		}
 		if rep.HumidityPct != 0 && rep.Time.After(rec.lastHumidity) {
 			rec.lastHumidity = rep.Time
 		}
-		if rep.Location.AccuracyMetres != 0 && rep.Time.After(rec.lastHumidity) {
+		if rep.Location.AccuracyMetres != 0 && rep.Time.After(rec.lastLocation) {
 			rec.lastLocation = rep.Time
 		}
 	}
@@ -153,6 +150,7 @@ func (rec *Recorder) downloadLocation() {
 
 func (rec *Recorder) StartAndBlock() error {
 	for i := 0; ; i++ {
+		time.Sleep(1 * time.Minute)
 		switch i % 4 {
 		case 0:
 			rec.downloadLocation()
@@ -170,6 +168,5 @@ func (rec *Recorder) StartAndBlock() error {
 		if err := os.WriteFile(rec.FileName, content, 0644); err != nil {
 			return err
 		}
-		time.Sleep(1 * time.Minute)
 	}
 }
