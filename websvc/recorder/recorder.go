@@ -36,6 +36,12 @@ type Recorder struct {
 }
 
 func New(fileName string, client *findmy.Client, maxDays int, maxBitReportSpread time.Duration) (rec *Recorder, err error) {
+	rec = &Recorder{
+		FileName:           fileName,
+		MaxDays:            maxDays,
+		MaxBitReportSpread: maxBitReportSpread,
+		client:             client,
+	}
 	content, err := os.ReadFile(fileName)
 	if err == nil {
 		if err = json.Unmarshal(content, &rec); err != nil {
@@ -45,12 +51,6 @@ func New(fileName string, client *findmy.Client, maxDays int, maxBitReportSpread
 		err = nil
 	} else {
 		return
-	}
-	rec = &Recorder{
-		FileName:           fileName,
-		MaxDays:            maxDays,
-		MaxBitReportSpread: maxBitReportSpread,
-		client:             client,
 	}
 	for _, rep := range rec.Records {
 		if rep.TemperatureC != 0 && rep.Time.After(rec.lastTemp) {
@@ -62,7 +62,7 @@ func New(fileName string, client *findmy.Client, maxDays int, maxBitReportSpread
 		if rep.HumidityPct != 0 && rep.Time.After(rec.lastHumidity) {
 			rec.lastHumidity = rep.Time
 		}
-		if rep.Location.AccuracyMetres != 0 && rep.Time.After(rec.lastLocation) {
+		if rep.Location.Valid() && rep.Time.After(rec.lastLocation) {
 			rec.lastLocation = rep.Time
 		}
 	}

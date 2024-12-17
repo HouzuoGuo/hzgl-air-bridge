@@ -54,6 +54,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	log.Printf("loaded %d saved reports from %s", len(rec.Records), saveFileName)
 
 	if webPort > 0 && webAddress != "" && webHandler != "" {
 		go func() {

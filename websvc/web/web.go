@@ -74,6 +74,6 @@ func (srv *Server) StartAndBlock() error {
 		Addr:    net.JoinHostPort(srv.Address, strconv.Itoa(srv.Port)),
 		Handler: srv.mux,
 	}
-	log.Printf("listening on %s:%d", srv.Address, srv.Port)
+	log.Printf("serving lightweight web app on %s:%d", srv.Address, srv.Port)
 	return httpServer.ListenAndServe()
 }
