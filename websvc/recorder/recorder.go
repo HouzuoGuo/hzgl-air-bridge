@@ -46,10 +46,12 @@ func New(fileName string, client *findmy.Client, maxDays int, maxBitReportSpread
 	} else {
 		return
 	}
-	rec.FileName = fileName
-	rec.MaxDays = maxDays
-	rec.MaxBitReportSpread = maxBitReportSpread
-	rec.client = client
+	rec = &Recorder{
+		FileName:           fileName,
+		MaxDays:            maxDays,
+		MaxBitReportSpread: maxBitReportSpread,
+		client:             client,
+	}
 	for _, rep := range rec.Records {
 		if rep.TemperatureC != 0 && rep.Time.After(rec.lastTemp) {
 			rec.lastTemp = rep.Time
@@ -150,6 +152,7 @@ func (rec *Recorder) downloadLocation() {
 
 func (rec *Recorder) StartAndBlock() error {
 	for i := 0; ; i++ {
+		log.Printf("sleeping a minute before reading the next report at round #%d", i)
 		time.Sleep(1 * time.Minute)
 		switch i % 4 {
 		case 0:

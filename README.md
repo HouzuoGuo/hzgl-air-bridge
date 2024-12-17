@@ -2,6 +2,12 @@
 
 Defeat air-gapped systems by exfiltrating data using Apple Find My network.
 
+The project comprises:
+
+- A custom beacon firmware for ESP32-C3 to beacon ambient condition data and location reports.
+- Web servers for reading reports without having to own an Apple device.
+- A lightweight web app for storing and reading the recent reports.
+
 ## Credits & prior research
 
 This project derives from:
@@ -9,7 +15,7 @@ This project derives from:
 - https://github.com/seemoo-lab/openhaystack (AGPL-3.0)
   - With kudos to its FindMy network protocol research and beacon firmware code.
 - https://github.com/positive-security/send-my (AGPL-3.0)
-  - With kudos to its FindMy network protocol research and beacon firmware code.
+  - With kudos to its FindMy network protocol research (https://positive.security/blog/send-my) and beacon firmware code.
 - https://github.com/dchristl/macless-haystack (GPL-3.0)
   - With kudos to its location retrieval web service and elliptic curve decryption implementation.
 
