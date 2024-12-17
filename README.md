@@ -33,6 +33,12 @@ The file contains parameters for the firmware to beacon both location and data. 
 
 ### 3. Upload beacon firmware
 
+If you wish to transmit ambient condition readings, wire up a BME280 sensor to the I2C bus. Put a 0.96 inch display on the I2C bus too as you like.
+
+Without BME280 the device will beacon reading value 0 for ambient conditions, and continue beaconing location reports.
+
+<img src="https://raw.githubusercontent.com/HouzuoGuo/hzgl-air-bridge/refs/heads/master/dev-board.jpg" width="480" height="320" />
+
 In Visual Studio Code, install PlatformIO plugin and then open directory `firmwrae/`.
 
 Change the serial port in `firmwrae/platformio.ini` to that belongs to your development board, and then execute `PlatformIO: Upload` action.
@@ -99,7 +105,7 @@ A built-in web server provides a lightweight frontend to view the reports:
   -webhandler=/air-bridge
 ```
 
-<img src="https://raw.githubusercontent.com/HouzuoGuo/hzgl-air-bridge/refs/heads/master/web-demo.png" />
+<img src="https://raw.githubusercontent.com/HouzuoGuo/hzgl-air-bridge/refs/heads/master/web-demo.png" width="415" height="435" />
 
 ## License
 
