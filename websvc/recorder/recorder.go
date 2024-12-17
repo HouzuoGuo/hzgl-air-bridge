@@ -73,7 +73,7 @@ func New(fileName string, client *findmy.Client, maxDays int, maxBitReportSpread
 func (rec *Recorder) downloadTemp() {
 	// Message ID 0 - temperature in celcius
 	tempBy, err := rec.client.DownloadDataByte(context.Background(), 0, 0, rec.MaxDays, rec.MaxBitReportSpread)
-	if err != nil || tempBy.ReportTime.Before(rec.lastTemp) {
+	if err != nil || !tempBy.ReportTime.After(rec.lastTemp) {
 		return
 	}
 	val := float64(tempBy.Value)/3 - 40
@@ -89,7 +89,7 @@ func (rec *Recorder) downloadTemp() {
 func (rec *Recorder) downloadHumidity() {
 	// Message ID 1 - humidity %
 	humidityBy, err := rec.client.DownloadDataByte(context.Background(), 1, 0, rec.MaxDays, rec.MaxBitReportSpread)
-	if err != nil || humidityBy.ReportTime.Before(rec.lastHumidity) {
+	if err != nil || !humidityBy.ReportTime.After(rec.lastHumidity) {
 		return
 	}
 	val := float64(humidityBy.Value) / 2.55
@@ -106,7 +106,7 @@ func (rec *Recorder) downloadPressure() {
 	// Message ID 2 - pressure hpa
 	pressBy1, err1 := rec.client.DownloadDataByte(context.Background(), 2, 0, rec.MaxDays, rec.MaxBitReportSpread)
 	pressBy2, err2 := rec.client.DownloadDataByte(context.Background(), 2, 1, rec.MaxDays, rec.MaxBitReportSpread)
-	if err1 != nil || err2 != nil || pressBy1.ReportTime.Before(rec.lastPressure) || pressBy2.ReportTime.Before(rec.lastPressure) {
+	if err1 != nil || err2 != nil || !pressBy1.ReportTime.After(rec.lastPressure) || !pressBy2.ReportTime.After(rec.lastPressure) {
 		return
 	}
 	pressIntVal := util.TwoBeBytes([]byte{pressBy1.Value, pressBy2.Value})
