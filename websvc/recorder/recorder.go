@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"math/rand"
 	"os"
 	"sort"
 	"time"
@@ -152,8 +153,9 @@ func (rec *Recorder) downloadLocation() {
 
 func (rec *Recorder) StartAndBlock() error {
 	for i := 0; ; i++ {
-		log.Printf("sleeping a minute before reading the next report at round #%d", i)
-		time.Sleep(1 * time.Minute)
+		duration := time.Duration(3*60+rand.Intn(2*60)) * time.Second
+		log.Printf("sleeping %v before reading the next report at round #%d", duration, i)
+		time.Sleep(duration)
 		switch i % 4 {
 		case 0:
 			rec.downloadLocation()
