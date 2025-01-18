@@ -42,8 +42,8 @@ void setup(void)
     delay(1000);
 
     // Initialise hardware and peripherals in the correct order.
-    i2c_init();
     oled_init();
+    i2c_init();
     bme280_init();
     bt_init();
     // Start background tasks.

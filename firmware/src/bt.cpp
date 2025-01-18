@@ -38,7 +38,7 @@ esp_bd_addr_t bt_dev_addr = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 // Bluetooth nearby scanning parameters.
 static esp_ble_scan_params_t ble_scan_params = {
     .scan_type = BLE_SCAN_TYPE_ACTIVE,
-    .own_addr_type = BLE_ADDR_TYPE_RANDOM,
+    .own_addr_type = BLE_ADDR_TYPE_PUBLIC,
     .scan_filter_policy = BLE_SCAN_FILTER_ALLOW_ALL,
     .scan_interval = (int)((float)BT_SCAN_DURATION_SEC / 0.625),
     .scan_window = (int)((float)BT_SCAN_DURATION_SEC / 0.625),
@@ -92,6 +92,7 @@ void bt_task_work()
     // Scan for nearby bluetooth devices every BT_SCAN_INTERVAL_SEC for 5 seconds.
     if (millis_last_bt_scan <= 0 || millis() - millis_last_bt_scan > BT_SCAN_INTERVAL_SEC * 1000)
     {
+        // TODO FIXME: the first scan mistakenly counts reepated beacon transmissions without de-duplicating them.
         bt_start_scan_nearby_devices();
         millis_last_bt_scan = millis();
         return;
@@ -151,7 +152,7 @@ void bt_esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
     {
         // Beacon transmission event callbacks.
     case ESP_GAP_BLE_ADV_DATA_RAW_SET_COMPLETE_EVT:
-        esp_ble_gap_start_advertising(&bt_advert_params);
+        ESP_ERROR_CHECK(esp_ble_gap_start_advertising(&bt_advert_params));
         break;
 
     case ESP_GAP_BLE_ADV_START_COMPLETE_EVT:
@@ -217,18 +218,9 @@ void bt_set_payload_from_key(uint8_t *payload, const uint8_t *public_key)
 
 void bt_set_phy_addr_and_advert_data()
 {
-    esp_err_t status;
-    esp_ble_gap_stop_advertising();
-    if ((status = esp_ble_gap_set_rand_addr(bt_dev_addr)) != ESP_OK)
-    {
-        ESP_LOGE(LOG_TAG, "failed to set bt physical address: %s", esp_err_to_name(status));
-        return;
-    }
-    if ((esp_ble_gap_config_adv_data_raw((uint8_t *)&bt_advert_data, sizeof(bt_advert_data))) != ESP_OK)
-    {
-        ESP_LOGE(LOG_TAG, "failed to set bt advertisement payload: %s", esp_err_to_name(status));
-        return;
-    }
+    ESP_ERROR_CHECK(esp_ble_gap_stop_advertising());
+    ESP_ERROR_CHECK(esp_ble_gap_set_rand_addr(bt_dev_addr));
+    ESP_ERROR_CHECK(esp_ble_gap_config_adv_data_raw((uint8_t *)&bt_advert_data, sizeof(bt_advert_data)));
     ESP_LOGI(LOG_TAG, "bt physical address: %02x %02x %02x %02x %02x %02x", bt_dev_addr[0], bt_dev_addr[1], bt_dev_addr[2], bt_dev_addr[3], bt_dev_addr[4], bt_dev_addr[5]);
 }
 

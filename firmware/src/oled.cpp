@@ -1,6 +1,6 @@
-#include <SSD1306Wire.h>
 #include <esp_task_wdt.h>
 #include <freertos/FreeRTOS.h>
+#include <U8g2lib.h>
 #include <string.h>
 #include "i2c.h"
 #include "bme280.h"
@@ -8,26 +8,23 @@
 #include "oled.h"
 
 static const char LOG_TAG[] = __FILE__;
-static SSD1306Wire oled(OLED_I2C_ADDR, -1, -1, GEOMETRY_128_64, I2C_ONE, I2C_FREQUENCY_HZ);
 
 bool oled_avail = false;
+U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE, I2C_OLED_SCL_GPIO, I2C_OLED_SDA_GPIO);
 
 bool oled_init()
 {
     ESP_LOGI(LOG_TAG, "initialising oled");
-    if (!i2c_avail || !oled.init())
+    if (!u8g2.begin())
     {
         ESP_LOGI(LOG_TAG, "failed to initialise oled");
         return false;
     }
-    oled.clear();
-    oled.setBrightness(64);
-    oled.setContrast(0xF1, 128, 0x40);
-    oled.resetOrientation();
-    oled.flipScreenVertically();
-    oled.setTextAlignment(TEXT_ALIGN_LEFT);
-    oled.setFont(ArialMT_Plain_10);
-    oled.displayOn();
+    u8g2.setContrast(255);
+    u8g2.setFont(u8g_font_helvR08);
+    u8g2.clearBuffer();
+    u8g2.drawStr(xOffset, yOffset, "abc");
+    u8g2.sendBuffer();
     ESP_LOGI(LOG_TAG, "oled initialised successfully");
     oled_avail = true;
     return true;
@@ -42,18 +39,10 @@ void oled_task_fun(void *_)
         {
             goto next;
         }
-        oled.drawStringMaxWidth(0, 0 * OLED_FONT_HEIGHT_PX, 200, "hi line 0");
-        oled.drawStringMaxWidth(0, 1 * OLED_FONT_HEIGHT_PX, 200, "hi line 1");
-        oled.drawStringMaxWidth(0, 2 * OLED_FONT_HEIGHT_PX, 200, "hi line 2");
-        oled.drawStringMaxWidth(0, 3 * OLED_FONT_HEIGHT_PX, 200, "hi line 3");
-        memset(lines, 0, sizeof(lines));
-        oled_render_status(lines);
-        oled.clear();
-        for (int i = 0; i < OLED_HEIGHT_LINES; i++)
-        {
-            oled.drawStringMaxWidth(0, i * OLED_FONT_HEIGHT_PX, 200, lines[i]);
-        }
-        oled.display();
+        u8g2.clearBuffer();
+        u8g2.drawStr(xOffset, yOffset + 10, "def");
+        u8g2.drawStr(xOffset, yOffset + 20, "ghi");
+        u8g2.sendBuffer();
     next:
         esp_task_wdt_reset();
         vTaskDelay(pdMS_TO_TICKS(OLED_TASK_LOOP_INTERVAL_MILLIS));
