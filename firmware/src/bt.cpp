@@ -2,6 +2,9 @@
 #include <freertos/FreeRTOS.h>
 #include <esp_task_wdt.h>
 #include <esp_log.h>
+#include <esp_bt.h>
+#include <esp_gap_ble_api.h>
+#include <esp_bt_main.h>
 #include <string.h>
 
 #include "custom.h"
@@ -13,6 +16,9 @@
 
 static const char LOG_TAG[] = __FILE__;
 
+int millis_last_bt_scan = 0;
+int bt_nearby_device_count = 0, bt_ongoing_scan_count = 0;
+bool bt_scan_in_progress = false;
 uint8_t bt_iter_data[2] = {0};
 bt_iter_snapshot bt_iter = {
     .num = -1,
@@ -23,16 +29,29 @@ bt_iter_snapshot bt_iter = {
         .pressure_hpa = 0,
         .altitude_masl = 0,
     },
+    .nearby_device_count = 0,
 };
 
 // The beacon functions will reset the device address.
 esp_bd_addr_t bt_dev_addr = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
+// Bluetooth nearby scanning parameters.
+static esp_ble_scan_params_t ble_scan_params = {
+    .scan_type = BLE_SCAN_TYPE_ACTIVE,
+    .own_addr_type = BLE_ADDR_TYPE_RANDOM,
+    .scan_filter_policy = BLE_SCAN_FILTER_ALLOW_ALL,
+    .scan_interval = (int)((float)BT_SCAN_DURATION_SEC / 0.625),
+    .scan_window = (int)((float)BT_SCAN_DURATION_SEC / 0.625),
+    // Avoid counting devices repeatedly when it beacons multiple times during the scan.
+    .scan_duplicate = BLE_SCAN_DUPLICATE_ENABLE,
+};
+
+// Beacon transmission parameters.
 esp_ble_adv_params_t bt_advert_params = {
     // The advertisement intervals do not matter much, leave them at a second or two.
     // The beacon functions control the attempts and duty cycle.
-    .adv_int_min = 0x0640, // 1600 * 0.625 = 1000 milliseconds
-    .adv_int_max = 0x0C80, // 3200 * 0.625 = 2000 milliseconds
+    .adv_int_min = 0x00A0, // 100ms
+    .adv_int_max = 0x00A0,
     .adv_type = ADV_TYPE_NONCONN_IND,
     .own_addr_type = BLE_ADDR_TYPE_RANDOM,
     .channel_map = ADV_CHNL_ALL,
@@ -61,35 +80,65 @@ void bt_init()
     ESP_ERROR_CHECK(esp_bt_controller_enable(ESP_BT_MODE_BLE));
     ESP_ERROR_CHECK(esp_bluedroid_init());
     ESP_ERROR_CHECK(esp_bluedroid_enable());
+    // +9dBm is the maximum power level for ESP32.
     ESP_ERROR_CHECK(esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, ESP_PWR_LVL_P9));
     ESP_ERROR_CHECK(esp_ble_gap_register_callback(bt_esp_gap_cb));
+
     ESP_LOGI(LOG_TAG, "bluetooth initialised successfully");
+}
+
+void bt_task_work()
+{
+    // Scan for nearby bluetooth devices every BT_SCAN_INTERVAL_SEC for 5 seconds.
+    if (millis_last_bt_scan <= 0 || millis() - millis_last_bt_scan > BT_SCAN_INTERVAL_SEC * 1000)
+    {
+        bt_start_scan_nearby_devices();
+        millis_last_bt_scan = millis();
+        return;
+    }
+    else if (millis() - millis_last_bt_scan < BT_SCAN_DURATION_SEC * 1000)
+    {
+        // Wait for the scan to finish.
+        return;
+    }
+    else if (millis() - millis_last_bt_scan < BT_SCAN_DURATION_SEC * 1000 + (BT_TASK_LOOP_INTERVAL_MILLIS * 2))
+    {
+        // Stop scanning and give the callback a brief moment (100ms) to process the stop event.
+        if (bt_scan_in_progress)
+        {
+            // Call the stop function explicitly to ensure the ESP_GAP_BLE_SCAN_STOP_COMPLETE_EVT is triggered.
+            esp_ble_gap_stop_scanning();
+            bt_scan_in_progress = false;
+        }
+        return;
+    }
+    // Alternative between location and data beacons.
+    bt_update_iter_snapshot();
+    switch (bt_get_tx_iter_num())
+    {
+    case BT_TX_ITER_TEMP:
+        bt_send_data_bme280_temp();
+        break;
+    case BT_TX_ITER_HUMID:
+        bt_send_data_bme280_humid();
+        break;
+    case BT_TX_ITER_PRESS:
+        bt_send_data_bme280_press();
+        break;
+    case BT_TX_ITER_LOCATION:
+        bt_send_location_once();
+        break;
+    case BT_TX_ITER_DEVICE_COUNT:
+        bt_send_nearby_dev_count();
+        break;
+    }
 }
 
 void bt_task_fun(void *_)
 {
     while (true)
     {
-        bt_update_iter_snapshot();
-        // Alternative between location and data beacons.
-        switch (bt_get_tx_iter_num())
-        {
-        case BT_TX_ITER_TEMP:
-            bt_send_data_bme280_temp_blocking();
-            break;
-        case BT_TX_ITER_HUMID:
-            bt_send_data_bme280_humid_blocking();
-            break;
-        case BT_TX_ITER_PRESS:
-            bt_send_data_bme280_press_blocking();
-            break;
-        case BT_TX_ITER_LOCATION:
-            bt_send_location_once_blocking();
-            break;
-        default:
-            goto next;
-        }
-    next:
+        bt_task_work();
         esp_task_wdt_reset();
         vTaskDelay(pdMS_TO_TICKS(BT_TASK_LOOP_INTERVAL_MILLIS));
     }
@@ -100,6 +149,7 @@ void bt_esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
     esp_err_t err;
     switch (event)
     {
+        // Beacon transmission event callbacks.
     case ESP_GAP_BLE_ADV_DATA_RAW_SET_COMPLETE_EVT:
         esp_ble_gap_start_advertising(&bt_advert_params);
         break;
@@ -124,6 +174,23 @@ void bt_esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
         {
             ESP_LOGI(LOG_TAG, "bt advertisement stopped");
         }
+        break;
+        // Nearby device scanning event callbacks.
+    case ESP_GAP_BLE_SCAN_RESULT_EVT:
+        if (param->scan_rst.search_evt == ESP_GAP_SEARCH_INQ_RES_EVT)
+        {
+            bt_ongoing_scan_count++;
+            if (bt_ongoing_scan_count % 5 == 0)
+            {
+                ESP_LOGI(LOG_TAG, "found %d nearly devices thus far", bt_ongoing_scan_count);
+            }
+        }
+        break;
+    case ESP_GAP_BLE_SCAN_STOP_COMPLETE_EVT:
+        bt_nearby_device_count = bt_ongoing_scan_count;
+        ESP_LOGI(LOG_TAG, "found %d nearly devices in total", bt_nearby_device_count);
+        bt_ongoing_scan_count = 0;
+        bt_scan_in_progress = false;
         break;
     default:
         break;
@@ -225,12 +292,13 @@ void bt_update_iter_snapshot()
                 .pressure_hpa = bme280_latest.pressure_hpa,
                 .altitude_masl = bme280_latest.altitude_masl,
             },
+            .nearby_device_count = bt_nearby_device_count,
         };
         memset(bt_iter_data, 0, sizeof(bt_iter_data));
     }
 }
 
-void bt_send_location_once_blocking()
+void bt_send_location_once()
 {
     ESP_LOGI(LOG_TAG, "beaconing location");
     bt_set_addr_from_key(bt_dev_addr, custom_public_key);
@@ -245,7 +313,7 @@ void bt_send_location_once_blocking()
     esp_ble_gap_stop_advertising();
 }
 
-void bt_send_data_bme280_temp_blocking()
+void bt_send_data_bme280_temp()
 {
     // Encode the ambient temperature between [-40, +45] celcius, step 1/3rd of a celcius.
     float temp = bt_iter.bme280.temp_celcius;
@@ -266,7 +334,7 @@ void bt_send_data_bme280_temp_blocking()
     bt_send_data_once_blocking(bt_iter.data, 1, BT_TX_ITER_TEMP);
 }
 
-void bt_send_data_bme280_humid_blocking()
+void bt_send_data_bme280_humid()
 {
     // Encode the ambient relative humidity percent [0, 100], step 0.4%.
     float humid = bt_iter.bme280.humidity_percent;
@@ -286,6 +354,18 @@ void bt_send_data_bme280_humid_blocking()
     bt_send_data_once_blocking(bt_iter.data, 1, BT_TX_ITER_HUMID);
 }
 
+void bt_send_nearby_dev_count()
+{
+    int count = bt_iter.nearby_device_count;
+    if (count > 255)
+    {
+        count = 255;
+    }
+    ESP_LOGI(LOG_TAG, "beacon round %d is sending humidity byte %02x", bt_iter.num, count);
+    bt_iter.data[0] = count;
+    bt_send_data_once_blocking(bt_iter.data, 1, BT_TX_ITER_DEVICE_COUNT);
+}
+
 typedef struct
 {
     uint8_t bytes[2];
@@ -300,7 +380,7 @@ two_be_bytes data_be2(int val)
     return ret;
 }
 
-void bt_send_data_bme280_press_blocking()
+void bt_send_data_bme280_press()
 {
     // Encode the ambient pressure between 100 hpa (>15000m) and 1200 hpa (<-1000m)
     float press = bt_iter.bme280.pressure_hpa;
@@ -320,4 +400,13 @@ void bt_send_data_bme280_press_blocking()
     bt_iter.data[1] = press_data.bytes[1];
     ESP_LOGI(LOG_TAG, "beacon round %d is sending pressure bytes %02x %02x", bt_iter.num, bt_iter.data[0], bt_iter.data[1]);
     bt_send_data_once_blocking(bt_iter.data, 2, BT_TX_ITER_PRESS);
+}
+
+void bt_start_scan_nearby_devices()
+{
+    ESP_LOGI(LOG_TAG, "scanning nearly devices");
+    bt_ongoing_scan_count = 0;
+    bt_scan_in_progress = true;
+    ESP_ERROR_CHECK(esp_ble_gap_set_scan_params(&ble_scan_params));
+    ESP_ERROR_CHECK(esp_ble_gap_start_scanning(BT_SCAN_DURATION_SEC));
 }

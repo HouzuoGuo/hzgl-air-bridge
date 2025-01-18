@@ -64,7 +64,7 @@ void oled_render_status(char lines[OLED_HEIGHT_LINES][OLED_WIDTH_CHARS])
 {
     snprintf(lines[0], OLED_WIDTH_CHARS, "Heap usage: %d/%dKB", (ESP.getHeapSize() - ESP.getFreeHeap()) / 1024, ESP.getHeapSize() / 1024);
     snprintf(lines[1], OLED_WIDTH_CHARS, "%.2fC %.2f%%RH", bme280_latest.temp_celcius, bme280_latest.humidity_percent);
-    snprintf(lines[2], OLED_WIDTH_CHARS, "%.2f Mamsl", bme280_latest.altitude_masl);
+    snprintf(lines[2], OLED_WIDTH_CHARS, "%.2f Mamsl %d btdev", bme280_latest.altitude_masl, bt_nearby_device_count);
     snprintf(lines[3], OLED_WIDTH_CHARS, "%.2fHpa", bme280_latest.pressure_hpa);
     snprintf(lines[4], OLED_WIDTH_CHARS, "Beacon iter #%d (%ds)", bt_iter.num, (BT_TX_ITER_DURATION_MILLIS - (millis() % BT_TX_ITER_DURATION_MILLIS)) / 1000);
     switch (bt_get_tx_iter_num())
@@ -80,6 +80,10 @@ void oled_render_status(char lines[OLED_HEIGHT_LINES][OLED_WIDTH_CHARS])
         break;
     case BT_TX_ITER_LOCATION:
         snprintf(lines[5], OLED_WIDTH_CHARS, "Beaconing location...");
+        break;
+    case BT_TX_ITER_DEVICE_COUNT:
+        snprintf(lines[5], OLED_WIDTH_CHARS, "Beaconing %d btdev", bt_iter.nearby_device_count);
+        break;
     default:
         break;
     }

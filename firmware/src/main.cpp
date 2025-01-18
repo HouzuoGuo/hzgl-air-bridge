@@ -37,7 +37,9 @@ void setup(void)
 
     esp_log_level_set("*", ESP_LOG_VERBOSE);
     Serial.begin(115200);
+    delay(1000);
     ESP_LOGI(LOG_TAG, "hzgl-air-bridge is starting up");
+    delay(1000);
 
     // Initialise hardware and peripherals in the correct order.
     i2c_init();
