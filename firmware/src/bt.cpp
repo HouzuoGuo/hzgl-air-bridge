@@ -16,12 +16,14 @@
 
 static const char LOG_TAG[] = __FILE__;
 
-int millis_last_bt_scan = 0;
+int bt_last_scan_millis = 0;
 int bt_nearby_device_count = 0, bt_ongoing_scan_count = 0;
 bool bt_scan_in_progress = false;
-uint8_t bt_iter_data[2] = {0};
+
+int bt_iter_count = -1;
+int bt_last_update_millis = 0;
+
 bt_iter_snapshot bt_iter = {
-    .num = -1,
     .data = {0},
     .bme280 = {
         .temp_celcius = 0,
@@ -90,19 +92,19 @@ void bt_init()
 void bt_task_work()
 {
     // Scan for nearby bluetooth devices every BT_SCAN_INTERVAL_SEC for 5 seconds.
-    if (millis_last_bt_scan <= 0 || millis() - millis_last_bt_scan > BT_SCAN_INTERVAL_SEC * 1000)
+    if (bt_last_scan_millis <= 0 || millis() - bt_last_scan_millis > BT_SCAN_INTERVAL_SEC * 1000)
     {
         // TODO FIXME: the first scan mistakenly counts reepated beacon transmissions without de-duplicating them.
         bt_start_scan_nearby_devices();
-        millis_last_bt_scan = millis();
+        bt_last_scan_millis = millis();
         return;
     }
-    else if (millis() - millis_last_bt_scan < BT_SCAN_DURATION_SEC * 1000)
+    else if (millis() - bt_last_scan_millis < BT_SCAN_DURATION_SEC * 1000)
     {
         // Wait for the scan to finish.
         return;
     }
-    else if (millis() - millis_last_bt_scan < BT_SCAN_DURATION_SEC * 1000 + (BT_TASK_LOOP_INTERVAL_MILLIS * 2))
+    else if (millis() - bt_last_scan_millis < BT_SCAN_DURATION_SEC * 1000 + (BT_TASK_LOOP_INTERVAL_MILLIS * 2))
     {
         // Stop scanning and give the callback a brief moment (100ms) to process the stop event.
         if (bt_scan_in_progress)
@@ -114,8 +116,7 @@ void bt_task_work()
         return;
     }
     // Alternative between location and data beacons.
-    bt_update_iter_snapshot();
-    switch (bt_get_tx_iter_num())
+    switch (bt_update_get_beacon_iter())
     {
     case BT_TX_ITER_TEMP:
         bt_send_data_bme280_temp();
@@ -266,28 +267,34 @@ void bt_send_data_once_blocking(uint8_t *data_to_send, uint32_t len, uint32_t ms
     esp_ble_gap_stop_advertising();
 }
 
-int bt_get_tx_iter_num()
+int bt_get_remaining_transmission_ms()
 {
-    return (millis() / BT_TX_ITER_DURATION_MILLIS) % BT_TX_TOTAL_ITERS;
+    return BT_TX_ITER_DURATION_MILLIS - (millis() - bt_last_update_millis);
 }
 
-void bt_update_iter_snapshot()
+int bt_update_get_beacon_iter()
 {
-    if (bt_get_tx_iter_num() != bt_iter.num)
+    // Broadcast the same beacon data for minutes at a time. Update the beacon data at a suiting regular interval.
+    if (bt_last_update_millis <= 0 || bt_iter_count <= 0 || bt_get_remaining_transmission_ms() <= 0)
     {
-        bt_iter = {
-            .num = bt_get_tx_iter_num(),
-            .data = {0}, // to be populated by sensor data tx functions
-            .bme280 = {
-                .temp_celcius = bme280_latest.temp_celcius,
-                .humidity_percent = bme280_latest.humidity_percent,
-                .pressure_hpa = bme280_latest.pressure_hpa,
-                .altitude_masl = bme280_latest.altitude_masl,
-            },
-            .nearby_device_count = bt_nearby_device_count,
-        };
-        memset(bt_iter_data, 0, sizeof(bt_iter_data));
+        bt_last_update_millis = millis();
+        memset(&bt_iter.data, 0, sizeof(bt_iter.data)); // to be populated by sensor data tx functions
+        bt_iter.bme280.temp_celcius = bme280_latest.temp_celcius;
+        bt_iter.bme280.humidity_percent = bme280_latest.humidity_percent;
+        bt_iter.bme280.pressure_hpa = bme280_latest.pressure_hpa;
+        bt_iter.bme280.altitude_masl = bme280_latest.altitude_masl;
+        bt_iter.nearby_device_count = bt_nearby_device_count;
+        bt_iter_count++;
+        ESP_LOGI(LOG_TAG, "update beacon iteration count to %d", bt_iter_count);
     }
+    int bt_iter_option = bt_iter_count % BT_TX_TOTAL_OPTIONS;
+    if (!bme280_avail && bt_iter_option >= BT_TX_ITER_TEMP && bt_iter_option <= BT_TX_ITER_PRESS)
+    {
+        // Advance the iteration number to skip environmental sensor readings.
+        bt_iter_count += BT_TX_ITER_PRESS - BT_TX_ITER_TEMP + 1;
+        ESP_LOGI(LOG_TAG, "advancing beacon iteration count to %d for bme280 is not available", bt_iter_count);
+    }
+    return bt_iter_count % BT_TX_TOTAL_OPTIONS;
 }
 
 void bt_send_location_once()
@@ -321,7 +328,7 @@ void bt_send_data_bme280_temp()
     temp += 40;
     temp *= 3;
     uint8_t val = uint8_t(temp);
-    ESP_LOGI(LOG_TAG, "beacon round %d is sending temperature byte %02x", bt_iter.num, val);
+    ESP_LOGI(LOG_TAG, "beacon round %d is sending temperature byte %02x", bt_iter_count, val);
     bt_iter.data[0] = val;
     bt_send_data_once_blocking(bt_iter.data, 1, BT_TX_ITER_TEMP);
 }
@@ -341,7 +348,7 @@ void bt_send_data_bme280_humid()
     // Zoom in to fill up the entire byte.
     humid *= 2.55;
     uint8_t val = uint8_t(humid);
-    ESP_LOGI(LOG_TAG, "beacon round %d is sending humidity byte %02x", bt_iter.num, val);
+    ESP_LOGI(LOG_TAG, "beacon round %d is sending humidity byte %02x", bt_iter_count, val);
     bt_iter.data[0] = val;
     bt_send_data_once_blocking(bt_iter.data, 1, BT_TX_ITER_HUMID);
 }
@@ -353,7 +360,7 @@ void bt_send_nearby_dev_count()
     {
         count = 255;
     }
-    ESP_LOGI(LOG_TAG, "beacon round %d is sending humidity byte %02x", bt_iter.num, count);
+    ESP_LOGI(LOG_TAG, "beacon round %d is sending humidity byte %02x", bt_iter_count, count);
     bt_iter.data[0] = count;
     bt_send_data_once_blocking(bt_iter.data, 1, BT_TX_ITER_DEVICE_COUNT);
 }
@@ -390,7 +397,7 @@ void bt_send_data_bme280_press()
     two_be_bytes press_data = data_be2(int(press));
     bt_iter.data[0] = press_data.bytes[0];
     bt_iter.data[1] = press_data.bytes[1];
-    ESP_LOGI(LOG_TAG, "beacon round %d is sending pressure bytes %02x %02x", bt_iter.num, bt_iter.data[0], bt_iter.data[1]);
+    ESP_LOGI(LOG_TAG, "beacon round %d is sending pressure bytes %02x %02x", bt_iter_count, bt_iter.data[0], bt_iter.data[1]);
     bt_send_data_once_blocking(bt_iter.data, 2, BT_TX_ITER_PRESS);
 }
 

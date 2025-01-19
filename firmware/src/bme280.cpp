@@ -1,5 +1,4 @@
 #include <Adafruit_BME280.h>
-#include <SSD1306Wire.h>
 #include <esp_task_wdt.h>
 #include <esp_log.h>
 #include <freertos/FreeRTOS.h>
