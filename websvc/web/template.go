@@ -33,6 +33,7 @@ const homeTemplateText = `
         {{if .TemperatureC}}Temperature
         {{else if .HumidityPct}}Humidity
         {{else if .PressureHpa}}Pressure
+        {{else if .BTDeviceCount}}Nearby BT device count
         {{else if .Location}}Location
         {{end}}
         </td>
@@ -43,6 +44,8 @@ const homeTemplateText = `
             {{printf "%.2f%%" .HumidityPct}}
           {{else if .PressureHpa}}
             {{printf "%.2f hPa" .PressureHpa}}
+          {{else if .BTDeviceCount}}
+            {{printf "%d" .BTDeviceCount}}
           {{else if .Location}}
             <a href="https://www.google.com/maps?q={{.Location.Latitude}},{{.Location.Longitude}}" target="_blank">
             Lat: {{printf "%.6f" .Location.Latitude}}, Lon: {{printf "%.6f" .Location.Longitude}}

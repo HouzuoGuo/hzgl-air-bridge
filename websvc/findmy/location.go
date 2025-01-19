@@ -93,7 +93,7 @@ func (client *Client) DownloadLocation(ctx context.Context, lookBackDays int) (r
 		err = fmt.Errorf("failed to decrypt all %d location reports, is the location private key correct?", decryptErrCount)
 	}
 	// Remove invalid reports and sort them from latest to oldest.
-	slices.DeleteFunc(ret, func(loc DecryptedLocation) bool {
+	ret = slices.DeleteFunc(ret, func(loc DecryptedLocation) bool {
 		return loc.Longitude == 0 && loc.Latitude == 0 && loc.AccuracyMetres == 0
 	})
 	sort.Slice(ret, func(i, j int) bool {

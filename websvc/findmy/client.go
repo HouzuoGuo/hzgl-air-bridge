@@ -99,7 +99,7 @@ func (client *Client) doReportRequest(ctx context.Context, req MultiReportReques
 		return nil, fmt.Errorf("failed to deserialise http response: %w", err)
 	}
 	// Remove invalid reports. I am unsure why they occasionally show up.
-	slices.DeleteFunc(resp.Results, func(e ReportResponse) bool {
+	resp.Results = slices.DeleteFunc(resp.Results, func(e ReportResponse) bool {
 		return e.EncryptedPayloadBase64 == "" || e.DatePublishedUnixMillis <= 1
 	})
 	// Sort retrieved location reports from latest to oldest.

@@ -15,12 +15,13 @@ import (
 )
 
 type Record struct {
-	TemperatureC float64                  `json:"temp_c,omitempty"`
-	HumidityPct  float64                  `json:"humidity_pct,omitempty"`
-	PressureHpa  float64                  `json:"pressure_hpa,omitempty"`
-	Time         time.Time                `json:"time,omitempty"`
-	BitSpread    time.Duration            `json:"bit_spread,omitempty"`
-	Location     findmy.DecryptedLocation `json:"location,omitempty"`
+	TemperatureC  float64                  `json:"temp_c,omitempty"`
+	HumidityPct   float64                  `json:"humidity_pct,omitempty"`
+	PressureHpa   float64                  `json:"pressure_hpa,omitempty"`
+	BTDeviceCount int                      `json:"bt_device_count,omitempty"`
+	Time          time.Time                `json:"time,omitempty"`
+	BitSpread     time.Duration            `json:"bit_spread,omitempty"`
+	Location      findmy.DecryptedLocation `json:"location,omitempty"`
 }
 
 type Recorder struct {
@@ -29,11 +30,12 @@ type Recorder struct {
 	MaxDays            int           `json:"-"`
 	MaxBitReportSpread time.Duration `json:"-"`
 
-	client       *findmy.Client
-	lastTemp     time.Time
-	lastHumidity time.Time
-	lastPressure time.Time
-	lastLocation time.Time
+	client            *findmy.Client
+	lastTemp          time.Time
+	lastHumidity      time.Time
+	lastPressure      time.Time
+	lastLocation      time.Time
+	lastBTDeviceCount time.Time
 }
 
 func New(fileName string, client *findmy.Client, maxDays int, maxBitReportSpread time.Duration) (rec *Recorder, err error) {
@@ -65,6 +67,9 @@ func New(fileName string, client *findmy.Client, maxDays int, maxBitReportSpread
 		}
 		if rep.Location.Valid() && rep.Time.After(rec.lastLocation) {
 			rec.lastLocation = rep.Time
+		}
+		if rep.BTDeviceCount != 0 && rep.Time.After(rec.lastBTDeviceCount) {
+			rec.lastBTDeviceCount = rep.Time
 		}
 	}
 	return
@@ -130,6 +135,21 @@ func (rec *Recorder) downloadPressure() {
 	})
 }
 
+func (rec *Recorder) downloadBTDeviceCount() {
+	// Message ID 4 - count of nearby bluetooth devices
+	countBy, err := rec.client.DownloadDataByte(context.Background(), 4, 0, rec.MaxDays, rec.MaxBitReportSpread)
+	if err != nil || !countBy.ReportTime.After(rec.lastBTDeviceCount) {
+		return
+	}
+	log.Printf("bluetooth device count %d, report: %+v", countBy.Value, countBy)
+	rec.Records = append(rec.Records, Record{
+		BTDeviceCount: int(countBy.Value),
+		Time:          countBy.ReportTime,
+		BitSpread:     countBy.BitReportSpread,
+	})
+	rec.lastBTDeviceCount = countBy.ReportTime
+}
+
 func (rec *Recorder) downloadLocation() {
 	loc, err := rec.client.DownloadLocation(context.Background(), rec.MaxDays)
 	if err != nil {
@@ -156,7 +176,7 @@ func (rec *Recorder) StartAndBlock() error {
 		duration := time.Duration(3*60+rand.Intn(2*60)) * time.Second
 		log.Printf("sleeping %v before reading the next report at round #%d", duration, i)
 		time.Sleep(duration)
-		switch i % 4 {
+		switch i % 5 {
 		case 0:
 			rec.downloadLocation()
 		case 1:
@@ -165,6 +185,8 @@ func (rec *Recorder) StartAndBlock() error {
 			rec.downloadHumidity()
 		case 3:
 			rec.downloadPressure()
+		case 4:
+			rec.downloadBTDeviceCount()
 		}
 		content, err := json.Marshal(*rec)
 		if err != nil {
