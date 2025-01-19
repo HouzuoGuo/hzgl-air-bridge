@@ -163,7 +163,7 @@ void bt_esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
         }
         else
         {
-            ESP_LOGI(LOG_TAG, "bt advertisement started");
+            // ESP_LOGI(LOG_TAG, "bt advertisement started");
         }
         break;
 
@@ -174,7 +174,7 @@ void bt_esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
         }
         else
         {
-            ESP_LOGI(LOG_TAG, "bt advertisement stopped");
+            // ESP_LOGI(LOG_TAG, "bt advertisement stopped");
         }
         break;
         // Nearby device scanning event callbacks.
@@ -222,7 +222,7 @@ void bt_set_phy_addr_and_advert_data()
     ESP_ERROR_CHECK(esp_ble_gap_stop_advertising());
     ESP_ERROR_CHECK(esp_ble_gap_set_rand_addr(bt_dev_addr));
     ESP_ERROR_CHECK(esp_ble_gap_config_adv_data_raw((uint8_t *)&bt_advert_data, sizeof(bt_advert_data)));
-    ESP_LOGI(LOG_TAG, "bt physical address: %02x %02x %02x %02x %02x %02x", bt_dev_addr[0], bt_dev_addr[1], bt_dev_addr[2], bt_dev_addr[3], bt_dev_addr[4], bt_dev_addr[5]);
+    // ESP_LOGI(LOG_TAG, "bt physical address: %02x %02x %02x %02x %02x %02x", bt_dev_addr[0], bt_dev_addr[1], bt_dev_addr[2], bt_dev_addr[3], bt_dev_addr[4], bt_dev_addr[5]);
 }
 
 void bt_set_addr_and_payload_for_bit(uint32_t index, uint32_t msg_id, uint8_t bit)
@@ -241,8 +241,7 @@ void bt_set_addr_and_payload_for_bit(uint32_t index, uint32_t msg_id, uint8_t bi
         crypt_copy_4b_big_endian(&public_key[14], &pubkey_gen_attempt);
         pubkey_gen_attempt++;
     } while (!crypt_is_valid_pubkey(public_key));
-    ESP_LOGI(LOG_TAG, "data report beacon payload (pubkey gen attempt %d): %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x ... %02x",
-             pubkey_gen_attempt, public_key[0], public_key[1], public_key[2], public_key[3], public_key[4], public_key[5], public_key[6], public_key[7], public_key[8], public_key[9], public_key[10], public_key[11], public_key[12], public_key[13], public_key[14], public_key[15], public_key[16], public_key[17], public_key[19], public_key[19], public_key[20], public_key[21], public_key[22], public_key[23], public_key[24], public_key[25], public_key[26], public_key[27]);
+    // ESP_LOGI(LOG_TAG, "data report beacon payload (pubkey gen attempt %d): %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x ... %02x", pubkey_gen_attempt, public_key[0], public_key[1], public_key[2], public_key[3], public_key[4], public_key[5], public_key[6], public_key[7], public_key[8], public_key[9], public_key[10], public_key[11], public_key[12], public_key[13], public_key[14], public_key[15], public_key[16], public_key[17], public_key[19], public_key[19], public_key[20], public_key[21], public_key[22], public_key[23], public_key[24], public_key[25], public_key[26], public_key[27]);
     bt_set_addr_from_key(bt_dev_addr, public_key);
     bt_set_payload_from_key(bt_advert_data, public_key);
 }
@@ -360,7 +359,7 @@ void bt_send_nearby_dev_count()
     {
         count = 255;
     }
-    ESP_LOGI(LOG_TAG, "beacon round %d is sending humidity byte %02x", bt_iter_count, count);
+    ESP_LOGI(LOG_TAG, "beacon round %d is sending nearby devicce count byte %02x", bt_iter_count, count);
     bt_iter.data[0] = count;
     bt_send_data_once_blocking(bt_iter.data, 1, BT_TX_ITER_DEVICE_COUNT);
 }
