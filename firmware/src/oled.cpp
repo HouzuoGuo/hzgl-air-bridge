@@ -24,6 +24,9 @@ bool oled_init()
     oled.setFlipMode(1);
     oled.setContrast(255);
     oled.setFont(u8g_font_helvR08);
+    oled.clear();
+    oled.clearDisplay();
+    oled.clearBuffer();
     ESP_LOGI(LOG_TAG, "oled initialised successfully");
     oled_avail = true;
     return true;
@@ -53,7 +56,7 @@ void oled_task_fun(void *_)
 
 void oled_render_status(char lines[OLED_HEIGHT_LINES][OLED_WIDTH_CHARS])
 {
-    snprintf(lines[0], OLED_WIDTH_CHARS, "%.1fC %.1f%%H", bme280_latest.temp_celcius, bme280_latest.humidity_percent);
+    snprintf(lines[0], OLED_WIDTH_CHARS, "%.1f%% %.1fC", bme280_latest.humidity_percent, bme280_latest.temp_celcius);
     snprintf(lines[1], OLED_WIDTH_CHARS, "%.1fM %dBT", bme280_latest.altitude_masl, bt_nearby_device_count);
     snprintf(lines[2], OLED_WIDTH_CHARS, "%.2fHpa", bme280_latest.pressure_hpa);
 
