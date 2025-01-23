@@ -19,6 +19,7 @@ type Record struct {
 	HumidityPct   float64                  `json:"humidity_pct,omitempty"`
 	PressureHpa   float64                  `json:"pressure_hpa,omitempty"`
 	BTDeviceCount int                      `json:"bt_device_count,omitempty"`
+	ManualMessage int                      `json:"manual_message,omitempty"`
 	Time          time.Time                `json:"time,omitempty"`
 	BitSpread     time.Duration            `json:"bit_spread,omitempty"`
 	Location      findmy.DecryptedLocation `json:"location,omitempty"`
@@ -36,6 +37,7 @@ type Recorder struct {
 	lastPressure      time.Time
 	lastLocation      time.Time
 	lastBTDeviceCount time.Time
+	lastManualMessage time.Time
 }
 
 func New(fileName string, client *findmy.Client, maxDays int, maxBitReportSpread time.Duration) (rec *Recorder, err error) {
@@ -70,6 +72,9 @@ func New(fileName string, client *findmy.Client, maxDays int, maxBitReportSpread
 		}
 		if rep.BTDeviceCount != 0 && rep.Time.After(rec.lastBTDeviceCount) {
 			rec.lastBTDeviceCount = rep.Time
+		}
+		if rep.ManualMessage != 0 && rep.Time.After(rec.lastManualMessage) {
+			rec.lastManualMessage = rep.Time
 		}
 	}
 	return
@@ -150,6 +155,21 @@ func (rec *Recorder) downloadBTDeviceCount() {
 	rec.lastBTDeviceCount = countBy.ReportTime
 }
 
+func (rec *Recorder) downloadManualInputMessage() {
+	// Message ID 5 - manual message input
+	messageBy, err := rec.client.DownloadDataByte(context.Background(), 5, 0, rec.MaxDays, rec.MaxBitReportSpread)
+	if err != nil || !messageBy.ReportTime.After(rec.lastManualMessage) {
+		return
+	}
+	log.Printf("manual message input %d, report: %+v", messageBy.Value, messageBy)
+	rec.Records = append(rec.Records, Record{
+		ManualMessage: int(messageBy.Value),
+		Time:          messageBy.ReportTime,
+		BitSpread:     messageBy.BitReportSpread,
+	})
+	rec.lastManualMessage = messageBy.ReportTime
+}
+
 func (rec *Recorder) downloadLocation() {
 	loc, err := rec.client.DownloadLocation(context.Background(), rec.MaxDays)
 	if err != nil {
@@ -176,7 +196,9 @@ func (rec *Recorder) StartAndBlock() error {
 		duration := time.Duration(3*60+rand.Intn(2*60)) * time.Second
 		log.Printf("sleeping %v before reading the next report at round #%d", duration, i)
 		time.Sleep(duration)
-		switch i % 5 {
+		// The manual input message has greater importance than the environment sensor telemetry.
+		// Make more attempts at downloading the manual input message.
+		switch i % 7 {
 		case 0:
 			rec.downloadLocation()
 		case 1:
@@ -184,9 +206,13 @@ func (rec *Recorder) StartAndBlock() error {
 		case 2:
 			rec.downloadHumidity()
 		case 3:
-			rec.downloadPressure()
+			rec.downloadManualInputMessage()
 		case 4:
+			rec.downloadPressure()
+		case 5:
 			rec.downloadBTDeviceCount()
+		case 6:
+			rec.downloadManualInputMessage()
 		}
 		content, err := json.Marshal(*rec)
 		if err != nil {
