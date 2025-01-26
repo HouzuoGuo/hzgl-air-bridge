@@ -1,6 +1,7 @@
 #include <esp_task_wdt.h>
 #include <freertos/FreeRTOS.h>
 #include <U8g2lib.h>
+#include <esp_log.h>
 #include <string.h>
 #include "i2c.h"
 #include "bme280.h"
@@ -56,37 +57,54 @@ void oled_task_fun(void *_)
 
 void oled_render_status(char lines[OLED_HEIGHT_LINES][OLED_WIDTH_CHARS])
 {
-    snprintf(lines[0], OLED_WIDTH_CHARS, "%.1f%% %.1fC", bme280_latest.humidity_percent, bme280_latest.temp_celcius);
-    snprintf(lines[1], OLED_WIDTH_CHARS, "%.1fM %dBT", bme280_latest.altitude_masl, bt_nearby_device_count);
-    snprintf(lines[2], OLED_WIDTH_CHARS, "%.2fHpa", bme280_latest.pressure_hpa);
+    if (bt_tx_message_value >= 0)
+    {
+        snprintf(lines[0], OLED_WIDTH_CHARS, "BT msg %d", bt_tx_message_value);
+        snprintf(lines[1], OLED_WIDTH_CHARS, "BT dev %d", bt_nearby_device_count);
+    }
+    else if (bme280_avail)
+    {
+        snprintf(lines[0], OLED_WIDTH_CHARS, "%.1f%% %.1fC", bme280_latest.humidity_percent, bme280_latest.temp_celcius);
+        snprintf(lines[1], OLED_WIDTH_CHARS, "%.1fM %dBT", bme280_latest.altitude_masl, bt_nearby_device_count);
+        snprintf(lines[2], OLED_WIDTH_CHARS, "%.2fHpa", bme280_latest.pressure_hpa);
+    }
+    else
+    {
+        snprintf(lines[1], OLED_WIDTH_CHARS, "BT dev %d", bt_nearby_device_count);
+    }
 
-    switch (oled_iter_counter++ % 3)
+    // Refresh the screen content faster than the scrolling interval of the status line.
+    int remaining_tx_sec = bt_get_remaining_transmission_ms() / 1000;
+    switch ((oled_iter_counter++ / (OLED_SCROLL_INTERVAL_MILLIS / OLED_TASK_LOOP_INTERVAL_MILLIS)) % 3)
     {
     case 0:
         snprintf(lines[3], OLED_WIDTH_CHARS, "Mem %d/%dK", (ESP.getHeapSize() - ESP.getFreeHeap()) / 1024, ESP.getHeapSize() / 1024);
         break;
     case 1:
-        snprintf(lines[3], OLED_WIDTH_CHARS, "BT TX %ds", bt_get_remaining_transmission_ms() / 1000);
-        break;
+        // fallthrough
     case 2:
-        switch (bt_update_get_beacon_iter())
+        switch (bt_tx_iter)
         {
         case BT_TX_ITER_TEMP:
-            snprintf(lines[3], OLED_WIDTH_CHARS, "BT %.2fC", bt_iter.bme280.temp_celcius);
+            snprintf(lines[3], OLED_WIDTH_CHARS, "T: %.0fC %ds", bt_iter.bme280.temp_celcius, remaining_tx_sec);
             break;
         case BT_TX_ITER_HUMID:
-            snprintf(lines[3], OLED_WIDTH_CHARS, "BT %.2f%%H", bt_iter.bme280.humidity_percent);
+            snprintf(lines[3], OLED_WIDTH_CHARS, "T: %.0f%% %ds", bt_iter.bme280.humidity_percent, remaining_tx_sec);
             break;
         case BT_TX_ITER_PRESS:
-            snprintf(lines[3], OLED_WIDTH_CHARS, "BT %.2fHpa", bt_iter.bme280.pressure_hpa);
+            snprintf(lines[3], OLED_WIDTH_CHARS, "T: %.0f %ds", bt_iter.bme280.pressure_hpa, remaining_tx_sec);
             break;
         case BT_TX_ITER_LOCATION:
-            snprintf(lines[3], OLED_WIDTH_CHARS, "BT location");
+            snprintf(lines[3], OLED_WIDTH_CHARS, "T: loc %ds", remaining_tx_sec);
             break;
         case BT_TX_ITER_DEVICE_COUNT:
-            snprintf(lines[3], OLED_WIDTH_CHARS, "BT %ddev", bt_iter.nearby_device_count);
+            snprintf(lines[3], OLED_WIDTH_CHARS, "T: bt%d %ds", bt_iter.nearby_device_count, remaining_tx_sec);
+            break;
+        case BT_TX_ITER_MESSAGE:
+            snprintf(lines[3], OLED_WIDTH_CHARS, "T: msg %d %ds", bt_iter.message_value, remaining_tx_sec);
             break;
         default:
+            snprintf(lines[3], OLED_WIDTH_CHARS, "TX: pls wait");
             break;
         }
     }

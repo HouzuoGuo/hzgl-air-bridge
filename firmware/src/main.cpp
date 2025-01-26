@@ -26,6 +26,7 @@
 #include "supervisor.h"
 #include "uECC.h"
 #include "bt.h"
+#include "button.h"
 
 static const char LOG_TAG[] = __FILE__;
 
@@ -42,6 +43,7 @@ void setup(void)
     delay(1000);
 
     // Initialise hardware and peripherals in the correct order.
+    button_init();
     oled_init();
     i2c_init();
     bme280_init();
