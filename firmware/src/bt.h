@@ -24,9 +24,8 @@ typedef struct
     int message_value;
 } bt_iter_snapshot;
 
-// The approximate number of milliseconds bluetooth takes to transmit one beacon.
-// According to some LLM, a beacon typicall only takes 1-2ms to transmit.
-const int BT_BEACON_IX_MS = 4;
+// Approximate (worst) beacon transmission time, which is based on 17 millis per channel and 3 channels in total.
+const int BT_BEACON_IX_MS = 20 * 3;
 const int BT_TASK_LOOP_INTERVAL_MILLIS = 3000;
 // Most data bits arrive within seconds of each other, but occasionally they can arrive a little over 5 minutes from each other.
 const int BT_TX_ITER_DURATION_MILLIS = 6 * 60 * 1000;
