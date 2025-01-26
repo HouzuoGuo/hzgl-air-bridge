@@ -86,25 +86,25 @@ void oled_render_status(char lines[OLED_HEIGHT_LINES][OLED_WIDTH_CHARS])
         switch (bt_tx_iter)
         {
         case BT_TX_ITER_TEMP:
-            snprintf(lines[3], OLED_WIDTH_CHARS, "T: %.0fC %ds", bt_iter.bme280.temp_celcius, remaining_tx_sec);
+            snprintf(lines[3], OLED_WIDTH_CHARS, "B %.0fC %ds", bt_iter.bme280.temp_celcius, remaining_tx_sec);
             break;
         case BT_TX_ITER_HUMID:
-            snprintf(lines[3], OLED_WIDTH_CHARS, "T: %.0f%% %ds", bt_iter.bme280.humidity_percent, remaining_tx_sec);
+            snprintf(lines[3], OLED_WIDTH_CHARS, "B %.0f%% %ds", bt_iter.bme280.humidity_percent, remaining_tx_sec);
             break;
         case BT_TX_ITER_PRESS:
-            snprintf(lines[3], OLED_WIDTH_CHARS, "T: %.0f %ds", bt_iter.bme280.pressure_hpa, remaining_tx_sec);
+            snprintf(lines[3], OLED_WIDTH_CHARS, "B %.0f %ds", bt_iter.bme280.pressure_hpa, remaining_tx_sec);
             break;
         case BT_TX_ITER_LOCATION:
-            snprintf(lines[3], OLED_WIDTH_CHARS, "T: loc %ds", remaining_tx_sec);
+            snprintf(lines[3], OLED_WIDTH_CHARS, "B LOC %ds", remaining_tx_sec);
             break;
         case BT_TX_ITER_DEVICE_COUNT:
-            snprintf(lines[3], OLED_WIDTH_CHARS, "T: bt%d %ds", bt_iter.nearby_device_count, remaining_tx_sec);
+            snprintf(lines[3], OLED_WIDTH_CHARS, "B BT%d %ds", bt_iter.nearby_device_count, remaining_tx_sec);
             break;
         case BT_TX_ITER_MESSAGE:
-            snprintf(lines[3], OLED_WIDTH_CHARS, "T: msg %d %ds", bt_iter.message_value, remaining_tx_sec);
+            snprintf(lines[3], OLED_WIDTH_CHARS, "B MSG%d %ds", bt_iter.message_value, remaining_tx_sec);
             break;
         default:
-            snprintf(lines[3], OLED_WIDTH_CHARS, "TX: pls wait");
+            snprintf(lines[3], OLED_WIDTH_CHARS, "BEACON: INIT");
             break;
         }
     }

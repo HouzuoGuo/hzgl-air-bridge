@@ -44,7 +44,6 @@ const int BT_SCAN_INTERVAL_SEC = 60;
 extern bt_iter_snapshot bt_iter;
 extern int bt_tx_iter;
 extern int bt_nearby_device_count;
-extern bt_tx_sched_t bt_tx_sched;
 extern int bt_tx_message_value;
 
 void bt_init();

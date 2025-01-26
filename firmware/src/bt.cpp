@@ -35,7 +35,6 @@ bt_iter_snapshot bt_iter = {
 int bt_tx_iter = -1;
 int bt_tx_message_value = -1;
 int bt_nearby_device_count = 0;
-bt_tx_sched_t bt_tx_sched = BT_TX_SCHED_REGULAR;
 
 // The beacon functions will reset the device address.
 esp_bd_addr_t bt_dev_addr = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};

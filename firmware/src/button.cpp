@@ -17,6 +17,17 @@ bool button_init()
     return true;
 }
 
+void button_inc_bt_tx_message()
+{
+
+    // The message comprises a single byte.
+    bt_tx_message_value++;
+    if (bt_tx_message_value > 255)
+    {
+        bt_tx_message_value = 0;
+    }
+}
+
 void button_task_fun(void *_)
 {
     while (true)
@@ -26,20 +37,19 @@ void button_task_fun(void *_)
         {
             if (button_last_down > 0 && millis() - button_last_down > BUTTON_TASK_LOOP_INTERVAL_MILLIS + 2)
             {
-                bt_tx_sched = BT_TX_SCHED_BUTTON_AND_LOCATION;
                 button_last_down = 0;
-                // The message comprises a single byte.
-                bt_tx_message_value++;
-                if (bt_tx_message_value > 255)
-                {
-                    bt_tx_message_value = 0;
-                }
+                button_inc_bt_tx_message();
                 ESP_LOGI(LOG_TAG, "setting transmission message to %d", bt_tx_message_value);
             }
         }
         else if (button_last_down == 0)
         {
             button_last_down = millis();
+        }
+        else if (millis() - button_last_down > BUTTON_TASK_LOOP_INTERVAL_MILLIS * 5)
+        {
+            // Hold the button down to rapidly increase the message byte value.
+            button_inc_bt_tx_message();
         }
         esp_task_wdt_reset();
         vTaskDelay(pdMS_TO_TICKS(BUTTON_TASK_LOOP_INTERVAL_MILLIS));
