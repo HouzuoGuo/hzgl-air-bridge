@@ -324,7 +324,7 @@ void bt_advance_tx_iter()
 void bt_update_beacon_iter()
 {
     // Update the beacon data and advance the iteration number at a regular interval.
-    if (bt_last_update_millis <= 0 || bt_tx_iter <= 0 || bt_get_remaining_transmission_ms() <= 0)
+    if (bt_last_update_millis <= 0 || bt_get_remaining_transmission_ms() <= 0)
     {
         bt_last_update_millis = millis();
         memset(&bt_iter.data, 0, sizeof(bt_iter.data)); // to be populated by sensor data tx functions

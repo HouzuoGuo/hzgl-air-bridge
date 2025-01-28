@@ -37,10 +37,10 @@ void setup(void)
     ESP_ERROR_CHECK(esp_task_wdt_add(NULL));
 
     esp_log_level_set("*", ESP_LOG_VERBOSE);
+    setCpuFrequencyMhz(80);
     Serial.begin(115200);
-    delay(1000);
-    ESP_LOGI(LOG_TAG, "hzgl-air-bridge is starting up");
-    delay(1000);
+    ESP_LOGI(LOG_TAG, "hzgl-air-bridge is starting up, xtal %d Mhz, cpu %d Mhz, apb %d Mhz",
+             getXtalFrequencyMhz(), getCpuFrequencyMhz(), getApbFrequency() / 1000000);
 
     // Initialise hardware and peripherals in the correct order.
     button_init();
