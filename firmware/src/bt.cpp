@@ -398,12 +398,13 @@ void bt_send_data_bme280_humid()
 void bt_send_nearby_dev_count()
 {
     int count = bt_iter.nearby_device_count;
-    if (count > 255)
+    if (count > 255 * 2)
     {
-        count = 255;
+        count = 255 * 2;
     }
-    ESP_LOGI(LOG_TAG, "beacon round %d is sending nearby devicce count byte %d", bt_tx_iter, count);
-    bt_iter.data[0] = count;
+    // In a busy office there can be upwards of 500 bluetooth devices nearby.
+    ESP_LOGI(LOG_TAG, "beacon round %d is sending nearby devicce count byte %d", bt_tx_iter, count / 2);
+    bt_iter.data[0] = count / 2;
     bt_send_data_once_blocking(bt_iter.data, 1, BT_TX_ITER_DEVICE_COUNT);
 }
 
