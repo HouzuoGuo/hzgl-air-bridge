@@ -146,9 +146,9 @@ func (rec *Recorder) downloadBTDeviceCount() {
 	if err != nil || !countBy.ReportTime.After(rec.lastBTDeviceCount) {
 		return
 	}
-	log.Printf("bluetooth device count %d, report: %+v", countBy.Value, countBy)
+	log.Printf("bluetooth device count %d, report: %+v", countBy.Value*2, countBy)
 	rec.Records = append(rec.Records, Record{
-		BTDeviceCount: int(countBy.Value),
+		BTDeviceCount: int(countBy.Value * 2),
 		Time:          countBy.ReportTime,
 		BitSpread:     countBy.BitReportSpread,
 	})
