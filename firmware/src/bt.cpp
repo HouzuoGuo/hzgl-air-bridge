@@ -306,6 +306,10 @@ void bt_advance_tx_iter()
             // Skip the message beacon.
             bt_tx_iter++;
         }
+        if (bt_tx_iter >= BT_TX_TOTAL_OPTIONS)
+        {
+            bt_tx_iter = 0;
+        }
         // If the environment sensor is unavailable, skip their beacons.
         if (!bme280_avail && bt_tx_iter >= BT_TX_ITER_TEMP && bt_tx_iter <= BT_TX_ITER_PRESS)
         {
@@ -313,10 +317,6 @@ void bt_advance_tx_iter()
             {
                 bt_tx_iter++;
             }
-        }
-        if (bt_tx_iter >= BT_TX_TOTAL_OPTIONS)
-        {
-            bt_tx_iter = 0;
         }
     }
 }
