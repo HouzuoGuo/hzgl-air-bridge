@@ -37,6 +37,7 @@ void setup(void)
     ESP_ERROR_CHECK(esp_task_wdt_add(NULL));
 
     esp_log_level_set("*", ESP_LOG_VERBOSE);
+    // Bluetooth doesn't work below 80 MHz, despite claims of support down to 40 MHz.
     setCpuFrequencyMhz(80);
     Serial.begin(115200);
     ESP_LOGI(LOG_TAG, "hzgl-air-bridge is starting up, xtal %d Mhz, cpu %d Mhz, apb %d Mhz",

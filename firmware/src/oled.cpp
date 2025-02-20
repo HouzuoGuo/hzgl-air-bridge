@@ -3,6 +3,7 @@
 #include <U8g2lib.h>
 #include <esp_log.h>
 #include <string.h>
+#include "button.h"
 #include "i2c.h"
 #include "bme280.h"
 #include "bt.h"
@@ -49,6 +50,21 @@ void oled_task_fun(void *_)
             oled.drawStr(xOffset, yOffset + line * OLED_FONT_HEIGHT_PX, lines[line]);
         }
         oled.sendBuffer();
+        if (millis() - button_last_press_millis > BUTTON_NO_INPUT_SLEEP_MILLIS)
+        {
+            // Too long without user input, start blinking the screen.
+            if (millis() % 4000 < 1000)
+            {
+                oled.setPowerSave(0);
+            }
+            else
+            {
+                oled.setPowerSave(1);
+            }
+            goto next;
+        } else {
+            oled.setPowerSave(0);
+        }
     next:
         esp_task_wdt_reset();
         vTaskDelay(pdMS_TO_TICKS(OLED_TASK_LOOP_INTERVAL_MILLIS));

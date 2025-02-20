@@ -8,6 +8,7 @@ const int OLED_SCROLL_INTERVAL_MILLIS = 2500;
 // The OLED dimensions are tuned for "ESP32-C3 OLED development board ceramic antenna ESP32 supermini development board wifi Bluetooth 0.42-inch screen" (by Wanzai Store 1103140424, https://www.aliexpress.com/item/1005007118546314.html)
 const int OLED_WIDTH_CHARS = 14;
 const int OLED_HEIGHT_LINES = 4;
+const int OLED_POWER_SAVE_BLINK_INTERVAL_MILLIS = 1000;
 const unsigned int BufferWidth = 132;
 const unsigned int BufferHeight = 64;
 const unsigned int ScreenWidth = 72;

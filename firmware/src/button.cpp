@@ -7,7 +7,8 @@
 
 static const char LOG_TAG[] = __FILE__;
 
-int button_last_down = 0;
+int button_click_down = 0;
+int button_last_press_millis = 0;
 
 bool button_init()
 {
@@ -35,21 +36,35 @@ void button_task_fun(void *_)
         int button = digitalRead(BUTTON_GPIO);
         if (button == 0)
         {
-            if (button_last_down > 0 && millis() - button_last_down > BUTTON_TASK_LOOP_INTERVAL_MILLIS + 2)
+
+            if (button_click_down > 0 && millis() - button_click_down > BUTTON_TASK_LOOP_INTERVAL_MILLIS + 2)
             {
-                button_last_down = 0;
+                // Releasing a click.
+                button_click_down = 0;
                 button_inc_bt_tx_message();
                 ESP_LOGI(LOG_TAG, "setting transmission message to %d", bt_tx_message_value);
             }
         }
-        else if (button_last_down == 0)
+        else if (millis() - button_last_press_millis > BUTTON_NO_INPUT_SLEEP_MILLIS)
         {
-            button_last_down = millis();
+            // Reset the timer and wake up the screen, don't considedr this a click.
+            button_last_press_millis = millis();
         }
-        else if (millis() - button_last_down > BUTTON_TASK_LOOP_INTERVAL_MILLIS * 5)
+        else if (millis() - button_last_press_millis < BUTTON_TASK_LOOP_INTERVAL_MILLIS * 2)
         {
-            // Hold the button down to rapidly increase the message byte value.
+            // Ignore bounces for 200 milliseconds.
+        }
+        else if (button_click_down == 0)
+        {
+            // Register the down click.
+            button_click_down = millis();
+            button_last_press_millis = millis();
+        }
+        else if (millis() - button_click_down > BUTTON_TASK_LOOP_INTERVAL_MILLIS * 5)
+        {
+            // Hold the click down to rapidly increase the message value.
             button_inc_bt_tx_message();
+            button_last_press_millis = millis();
         }
         esp_task_wdt_reset();
         vTaskDelay(pdMS_TO_TICKS(BUTTON_TASK_LOOP_INTERVAL_MILLIS));
