@@ -33,7 +33,12 @@ static const char LOG_TAG[] = __FILE__;
 void setup(void)
 {
     // Monitor the arduino SDK main task and reboot automatically when it is stuck.
-    ESP_ERROR_CHECK(esp_task_wdt_init(SUPERVISOR_WATCHDOG_TIMEOUT_SEC, true));
+    esp_task_wdt_deinit();
+    esp_task_wdt_config_t wdt_config = {
+        .timeout_ms = SUPERVISOR_WATCHDOG_TIMEOUT_SEC * 1000,
+        .idle_core_mask = (1 << portNUM_PROCESSORS) - 1, // all processors
+        .trigger_panic = true};
+    ESP_ERROR_CHECK(esp_task_wdt_init(&wdt_config));
     ESP_ERROR_CHECK(esp_task_wdt_add(NULL));
 
     esp_log_level_set("*", ESP_LOG_VERBOSE);

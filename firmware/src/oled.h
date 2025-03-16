@@ -9,12 +9,6 @@ const int OLED_SCROLL_INTERVAL_MILLIS = 2500;
 const int OLED_WIDTH_CHARS = 14;
 const int OLED_HEIGHT_LINES = 4;
 const int OLED_POWER_SAVE_BLINK_INTERVAL_MILLIS = 1000;
-const unsigned int BufferWidth = 132;
-const unsigned int BufferHeight = 64;
-const unsigned int ScreenWidth = 72;
-const unsigned int ScreenHeight = 40;
-const unsigned int xOffset = (BufferWidth - ScreenWidth) / 2;
-const unsigned int yOffset = (BufferHeight - ScreenHeight) / 2 + 10;
 
 extern bool oled_avail;
 

@@ -25,7 +25,7 @@ bool oled_init()
     }
     oled.setFlipMode(1);
     oled.setContrast(255);
-    oled.setFont(u8g_font_helvR08);
+    oled.setFont(OLED_FONT);
     oled.clear();
     oled.clearDisplay();
     oled.clearBuffer();
@@ -47,13 +47,13 @@ void oled_task_fun(void *_)
         oled.clearBuffer();
         for (int line = 0; line < OLED_HEIGHT_LINES; line++)
         {
-            oled.drawStr(xOffset, yOffset + line * OLED_FONT_HEIGHT_PX, lines[line]);
+            oled.drawStr(OLED_X_OFFSET, OLED_Y_OFFSET + line * OLED_FONT_HEIGHT_PX, lines[line]);
         }
         oled.sendBuffer();
         if (millis() - button_last_press_millis > BUTTON_NO_INPUT_SLEEP_MILLIS)
         {
             // Too long without user input, start blinking the screen.
-            if (millis() % 4000 < 1000)
+            if (millis() % 3000 < 1000)
             {
                 oled.setPowerSave(0);
             }
@@ -75,8 +75,9 @@ void oled_render_status(char lines[OLED_HEIGHT_LINES][OLED_WIDTH_CHARS])
 {
     if (bt_tx_message_value >= 0)
     {
-        snprintf(lines[0], OLED_WIDTH_CHARS, "BT msg %d", bt_tx_message_value);
-        snprintf(lines[1], OLED_WIDTH_CHARS, "BT dev %d", bt_nearby_device_count);
+        // There's a weird Y offset of about 1 line's height on xiao esp32-c6. Avoid printing on the first line.
+        snprintf(lines[1], OLED_WIDTH_CHARS, "BT msg %d", bt_tx_message_value);
+        snprintf(lines[2], OLED_WIDTH_CHARS, "BT dev %d", bt_nearby_device_count);
     }
     else if (bme280_avail)
     {
