@@ -12,7 +12,7 @@ const homeTemplateText = `
     <iframe width="480" height="320"
       frameborder="0" scrolling="no"
       marginheight="0" marginwidth="0"
-      src="https://www.openstreetmap.org/export/embed.html?bbox={{(index .RecentTrail 0).Longitude | add -0.01}},{{(index .RecentTrail 0).Latitude | add -0.01}},{{(index .RecentTrail 0).Longitude | add 0.01}},{{(index .RecentTrail 0).Latitude | add 0.01}}&layer=mapnik{{range .RecentTrail}}&marker={{.Latitude}}%2C{{.Longitude}}{{end}}"
+      src="https://www.openstreetmap.org/export/embed.html?bbox={{.LastLocation.Longitude | add -0.01}},{{.LastLocation.Latitude | add -0.01}},{{.LastLocation.Longitude | add 0.01}},{{.LastLocation.Latitude | add 0.01}}&layer=mapnik&marker={{.LastLocation.Latitude}}%2C{{.LastLocation.Longitude}}"
       style="border: 1px solid black">
     </iframe>
 
