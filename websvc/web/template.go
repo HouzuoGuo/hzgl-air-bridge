@@ -5,16 +5,43 @@ const homeTemplateText = `
 <html>
   <head>
     <title>hzgl-air-bridge</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   </head>
   <body>
-    <h3>Location</h3>
+    <h3>Location trace</h3>
     <p>Last updated {{.LastLocation.Timestamp.Format "2006-01-02 15:04:05"}} accurate to {{.LastLocation.AccuracyMetres}} meters</p>
-    <iframe width="480" height="320"
-      frameborder="0" scrolling="no"
-      marginheight="0" marginwidth="0"
-      src="https://www.openstreetmap.org/export/embed.html?bbox={{.LastLocation.Longitude | add -0.01}},{{.LastLocation.Latitude | add -0.01}},{{.LastLocation.Longitude | add 0.01}},{{.LastLocation.Latitude | add 0.01}}&layer=mapnik&marker={{.LastLocation.Latitude}}%2C{{.LastLocation.Longitude}}"
-      style="border: 1px solid black">
-    </iframe>
+    <div id="map" style="height: 600px; border: 1px solid black;"></div>
+
+    <script>
+      let points = [
+          {{- range $idx, $pt := .RecentTrail }}
+          {{ if $idx }},{{ end }}
+          { "lat": {{ $pt.Latitude }}, "lng": {{ $pt.Longitude }}, "time": "{{ $pt.Timestamp.Format "2006-01-02 15:04:05" }}" }
+          {{- end }}
+      ];
+
+      let center = [{{ .LastLocation.Latitude }}, {{ .LastLocation.Longitude }}];
+
+      function on_loaded() {
+          var map = L.map('map').setView(center, 15);
+          L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+          }).addTo(map);
+
+          points.forEach((pt) => {
+            let popupText = "Latitude: " + pt.lat + ", Longitude: " + pt.lng + "<br>Time: " + pt.time;
+            let circle = L.circle([pt.lat, pt.lng], {
+                color: 'red',
+                radius: 20
+            }).addTo(map);
+            circle.bindPopup(popupText);
+          });
+      }
+
+      document.addEventListener('DOMContentLoaded', on_loaded);
+    </script>
 
     <table>
     <thead>

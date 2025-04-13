@@ -48,7 +48,7 @@ func New(address string, port int, handler string, recorder *recorder.Recorder) 
 		// Collect the 20 latest location records to plot a trail.
 		var recentTrail []findmy.DecryptedLocation
 		var lastLocation findmy.DecryptedLocation
-		for i := 0; i < len(clonedRecords) && len(recentTrail) < 20; i++ {
+		for i := 0; i < len(clonedRecords) && len(recentTrail) < 50; i++ {
 			if rec := clonedRecords[i]; rec.Location.Valid() {
 				recentTrail = append(recentTrail, rec.Location)
 				if !lastLocation.Valid() {
