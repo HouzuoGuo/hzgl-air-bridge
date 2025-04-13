@@ -15,31 +15,32 @@ const homeTemplateText = `
 
     <script>
       let points = [
-          {{- range $idx, $pt := .RecentTrail }}
-          {{ if $idx }},{{ end }}
-          { "lat": {{ $pt.Latitude }}, "lng": {{ $pt.Longitude }}, "time": "{{ $pt.Timestamp.Format "2006-01-02 15:04:05" }}" }
-          {{- end }}
+        {{- range $idx, $pt := .RecentTrail }}
+        {{ if $idx }},{{ end }}
+        { "lat": {{ $pt.Latitude }}, "lng": {{ $pt.Longitude }}, "time": "{{ $pt.Timestamp.Format "2006-01-02 15:04:05" }}" }
+        {{- end }}
       ];
-
       let center = [{{ .LastLocation.Latitude }}, {{ .LastLocation.Longitude }}];
-
       function on_loaded() {
-          var map = L.map('map').setView(center, 15);
-          L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19,
-            attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          }).addTo(map);
+        var map = L.map('map').setView(center, 15);
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+        }).addTo(map);
 
-          points.forEach((pt) => {
-            let popupText = "Latitude: " + pt.lat + ", Longitude: " + pt.lng + "<br>Time: " + pt.time;
-            let circle = L.circle([pt.lat, pt.lng], {
-                color: 'red',
-                radius: 20
-            }).addTo(map);
-            circle.bindPopup(popupText);
-          });
+        let polylineCoords = points.map(pt => [pt.lat, pt.lng]);
+
+        L.polyline(polylineCoords, {
+          color: 'blue',
+          weight: 2
+        }).addTo(map);
+
+        points.forEach((pt) => {
+          let popupText = "Latitude: " + pt.lat + ", Longitude: " + pt.lng + "<br>Time: " + pt.time;
+          let circle = L.circle([pt.lat, pt.lng], {color: 'blue', radius: 20}).addTo(map);
+          circle.bindPopup(popupText);
+        });
       }
-
       document.addEventListener('DOMContentLoaded', on_loaded);
     </script>
 
