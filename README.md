@@ -43,7 +43,7 @@ If you wish to transmit ambient condition readings, wire up a BME280 sensor to t
 
 Without BME280 the device will beacon reading value 0 for ambient conditions, and continue beaconing location reports.
 
-<img src="https://raw.githubusercontent.com/HouzuoGuo/hzgl-air-bridge/refs/heads/master/prototype.png" width="480" height="320" />
+<img src="https://raw.githubusercontent.com/HouzuoGuo/hzgl-air-bridge/refs/heads/master/prototype.png" width="627" height="320" />
 
 In Visual Studio Code, install PlatformIO plugin and then open directory `firmwrae/`.
 
