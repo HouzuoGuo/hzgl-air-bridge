@@ -207,7 +207,7 @@ void bt_esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
 
 void bt_set_addr_from_key(esp_bd_addr_t addr, const uint8_t *public_key)
 {
-    addr[0] = public_key[0] | 0b11000000;
+    addr[0] = public_key[0] | 0b11000000; // static random address
     addr[1] = public_key[1];
     addr[2] = public_key[2];
     addr[3] = public_key[3];
@@ -231,32 +231,36 @@ void bt_set_phy_addr_and_advert_data()
     // ESP_LOGI(LOG_TAG, "bt physical address: %02x %02x %02x %02x %02x %02x", bt_dev_addr[0], bt_dev_addr[1], bt_dev_addr[2], bt_dev_addr[3], bt_dev_addr[4], bt_dev_addr[5]);
 }
 
-void bt_set_addr_and_payload_for_bit(uint32_t index, uint32_t msg_id, uint8_t bit)
+void bt_set_addr_and_payload_for_bit(uint8_t index, uint8_t msg_id, uint8_t bit)
 {
     // Packet format: [2byte magic] [4byte index] [4byte msg_id] [4byte modem_id] [zeros] [1byte bit value]
-    uint32_t pubkey_gen_attempt = 0;
-    static uint8_t public_key[28] = {0};
-    public_key[0] = custom_pubkey_magic1;
-    public_key[1] = custom_pubkey_magic2;
-    crypt_copy_4b_big_endian(&public_key[2], &index);
-    crypt_copy_4b_big_endian(&public_key[6], &msg_id);
-    crypt_copy_4b_big_endian(&public_key[10], &custom_modem_id);
-    public_key[27] = bit;
+    uint8_t pubkey_gen_attempt = 0;
+    static uint8_t data[28] = {0};
+    // [0 - 24] = custom magic key
+    memcpy(&data, &custom_magic_key, 24);
+    // [24] - id of the message type
+    data[24] = msg_id;
+    // [25] - index of the bit
+    data[25] = index;
+    // [26] - bit value
+    data[26] = bit;
     do
     {
-        crypt_copy_4b_big_endian(&public_key[14], &pubkey_gen_attempt);
+        // [27] = public key generation attempt
+        data[27] = pubkey_gen_attempt & 0xFF;
         pubkey_gen_attempt++;
-    } while (!crypt_is_valid_pubkey(public_key));
-    // ESP_LOGI(LOG_TAG, "data report beacon payload (pubkey gen attempt %d): %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x ... %02x", pubkey_gen_attempt, public_key[0], public_key[1], public_key[2], public_key[3], public_key[4], public_key[5], public_key[6], public_key[7], public_key[8], public_key[9], public_key[10], public_key[11], public_key[12], public_key[13], public_key[14], public_key[15], public_key[16], public_key[17], public_key[19], public_key[19], public_key[20], public_key[21], public_key[22], public_key[23], public_key[24], public_key[25], public_key[26], public_key[27]);
-    bt_set_addr_from_key(bt_dev_addr, public_key);
-    bt_set_payload_from_key(bt_advert_data, public_key);
+    } while (!crypt_is_valid_pubkey(data));
+    // ESP_LOGI(LOG_TAG, "beacon data (pubkey gen attempt %d): %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x",
+    //  pubkey_gen_attempt, data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7], data[8], data[9], data[10], data[11], data[12], data[13], data[14], data[15], data[16], data[17], data[19], data[19], data[20], data[21], data[22], data[23], data[24], data[25], data[26], data[27]);
+    bt_set_addr_from_key(bt_dev_addr, data);
+    bt_set_payload_from_key(bt_advert_data, data);
 }
 
-void bt_send_data_once_blocking(uint8_t *data_to_send, uint32_t len, uint32_t msg_id)
+void bt_send_data_once_blocking(uint8_t *data_to_send, uint32_t len, uint8_t msg_id)
 {
-    for (int byte_index = 0; byte_index < len; byte_index++)
+    for (uint8_t byte_index = 0; byte_index < len; byte_index++)
     {
-        for (int bit_index = 0; bit_index < 8; bit_index++)
+        for (uint8_t bit_index = 0; bit_index < 8; bit_index++)
         {
             uint8_t bit_value = 0;
             if (IS_BIT_SET(data_to_send[byte_index], bit_index))
@@ -372,7 +376,7 @@ void bt_send_data_bme280_temp()
     uint8_t val = uint8_t(temp);
     ESP_LOGI(LOG_TAG, "beacon round %d is sending temperature byte %02x", bt_tx_iter, val);
     bt_iter.data[0] = val;
-    bt_send_data_once_blocking(bt_iter.data, 1, BT_TX_ITER_TEMP);
+    bt_send_data_once_blocking(bt_iter.data, 1, (uint8_t)BT_TX_ITER_TEMP);
 }
 
 void bt_send_data_bme280_humid()
@@ -392,7 +396,7 @@ void bt_send_data_bme280_humid()
     uint8_t val = uint8_t(humid);
     ESP_LOGI(LOG_TAG, "beacon round %d is sending humidity byte %02x", bt_tx_iter, val);
     bt_iter.data[0] = val;
-    bt_send_data_once_blocking(bt_iter.data, 1, BT_TX_ITER_HUMID);
+    bt_send_data_once_blocking(bt_iter.data, 1, (uint8_t)BT_TX_ITER_HUMID);
 }
 
 void bt_send_nearby_dev_count()
@@ -405,7 +409,7 @@ void bt_send_nearby_dev_count()
     // In a busy office there can be upwards of 500 bluetooth devices nearby.
     ESP_LOGI(LOG_TAG, "beacon round %d is sending nearby devicce count byte %d", bt_tx_iter, count / 2);
     bt_iter.data[0] = count / 2;
-    bt_send_data_once_blocking(bt_iter.data, 1, BT_TX_ITER_DEVICE_COUNT);
+    bt_send_data_once_blocking(bt_iter.data, 1, (uint8_t)BT_TX_ITER_DEVICE_COUNT);
 }
 
 typedef struct
@@ -441,7 +445,7 @@ void bt_send_data_bme280_press()
     bt_iter.data[0] = press_data.bytes[0];
     bt_iter.data[1] = press_data.bytes[1];
     ESP_LOGI(LOG_TAG, "beacon round %d is sending pressure bytes %02x %02x", bt_tx_iter, bt_iter.data[0], bt_iter.data[1]);
-    bt_send_data_once_blocking(bt_iter.data, 2, BT_TX_ITER_PRESS);
+    bt_send_data_once_blocking(bt_iter.data, 2, (uint8_t)BT_TX_ITER_PRESS);
 }
 
 void bt_start_scan_nearby_devices()
@@ -457,5 +461,5 @@ void bt_send_message()
 {
     ESP_LOGI(LOG_TAG, "beacon round %d is sending message byte %d", bt_tx_iter, bt_iter.message_value);
     bt_iter.data[0] = bt_iter.message_value;
-    bt_send_data_once_blocking(bt_iter.data, 1, BT_TX_ITER_MESSAGE);
+    bt_send_data_once_blocking(bt_iter.data, 1, (uint8_t)BT_TX_ITER_MESSAGE);
 }

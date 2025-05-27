@@ -27,6 +27,19 @@ void crypt_copy_4b_big_endian(uint8_t *dst, const uint32_t *src)
     dst[3] = value & 0xFF;
 }
 
+void crypt_copy_8b_big_endian(uint8_t *dst, const uint64_t *src)
+{
+    uint64_t value = *src;
+    dst[0] = (value >> 56) & 0xFF;
+    dst[1] = (value >> 48) & 0xFF;
+    dst[2] = (value >> 40) & 0xFF;
+    dst[3] = (value >> 32) & 0xFF;
+    dst[4] = (value >> 24) & 0xFF;
+    dst[5] = (value >> 16) & 0xFF;
+    dst[6] = (value >> 8) & 0xFF;
+    dst[7] = value & 0xFF;
+}
+
 void crypt_pub_from_priv(uint8_t *pub_compressed, uint8_t *priv)
 {
     const struct uECC_Curve_t *curve = uECC_secp224r1();

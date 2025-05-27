@@ -17,13 +17,16 @@ const uint8_t custom_public_key[28] = {
     0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12,
     0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12,
     0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12,
+    0x12, 0x12, 0x12, 0x12,
 };
 
-// The parameters below are exclusively used for beaconing data and are unrelated to location reports.
+// The magic key parameter is exclusively used for beaconing data, and not used for beaconing location.
+// It is a hand-crafted random sequence that uniquely identifes your beacon.
+// If you have multiple beacons, then each beacon should have a unique magic key.
+// Use any random number generator of your liking to create make this key.
 
-// The modem ID identifies each bluetooth device. Create a unique number of your own.
-const uint32_t custom_modem_id = 0x12345678;
-
-// Create two unique bytes, they are shared by all bluetooth devices.
-const uint32_t custom_pubkey_magic1 = 0x11;
-const uint32_t custom_pubkey_magic2 = 0x22;
+const uint8_t custom_magic_key[24] = {
+    0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12,
+    0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12,
+    0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12,
+};
