@@ -27,10 +27,8 @@ func main() {
 	flag.StringVar(&locAdvertKey, "locadvertkey", "", "the base64-encoded advertisement key for retrieving location beacons, not to be confused with hashed advertisement key!")
 
 	// Data reporting parameters.
-	var pubkeyMagic1, pubkeyMagic2, modemID int
-	flag.IntVar(&pubkeyMagic1, "pubkey1", 0, "the custom_pubkey_magic1 from custom.h, converted from hex to decimal.")
-	flag.IntVar(&pubkeyMagic2, "pubkey2", 0, "the custom_pubkey_magic2 from custom.h, converted from hex to decimal.")
-	flag.IntVar(&modemID, "modemid", 0, "the custom_modem_id from custom.h, converted from hex to decimal.")
+	var customMagicKeyBase64 string
+	flag.StringVar(&customMagicKeyBase64, "custommagic", "", "base64-encoded string of the custom_magic_key value (24 bytes) defined in the beacon firmware")
 
 	// Persistence & web frontend parameters.
 	var saveFileName string
@@ -44,12 +42,12 @@ func main() {
 
 	flag.Parse()
 
-	if locPrivKey == "" || locAdvertKey == "" || pubkeyMagic1 < 1 || pubkeyMagic2 < 1 || modemID < 1 || saveFileName == "" {
+	if locPrivKey == "" || locAdvertKey == "" || customMagicKeyBase64 == "" || saveFileName == "" {
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
 
-	client := findmy.NewClient(reportWebAddress, util.Base64Decode(locPrivKey), util.Base64Decode(locAdvertKey), pubkeyMagic1, pubkeyMagic2, modemID)
+	client := findmy.NewClient(reportWebAddress, util.Base64Decode(locPrivKey), util.Base64Decode(locAdvertKey), util.Base64Decode(customMagicKeyBase64))
 	rec, err := recorder.New(saveFileName, client, maxDays, time.Duration(maxBitReportSpreadMins)*time.Minute)
 	if err != nil {
 		log.Fatal(err)

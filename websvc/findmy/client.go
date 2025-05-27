@@ -57,21 +57,25 @@ type Client struct {
 	LocationReportHttpAddress string
 	LocationPrivateKey        []byte
 	LocationAdvertisementKey  []byte
-
-	PubkeyMagic1 int
-	PubkeyMagic2 int
-	ModemID      int
+	CustomMagicKey            []byte
 }
 
-func NewClient(reportHttpAddr string, locPrivKey, locAdvertKey []byte, pubkeyMagic1, pubkeyMagic2, modemID int) *Client {
+func NewClient(reportHttpAddr string, locPrivKey, locAdvertKey, customMagicKey []byte) *Client {
+	if len(locAdvertKey) != 28 {
+		panic("location advertisement key must be exactly 28 bytes long")
+	}
+	if len(locPrivKey) != 28 {
+		panic("location private key must be exactly 28 byte long")
+	}
+	if len(customMagicKey) != 24 {
+		panic("custom magic key must be exactly 24 bytes long")
+	}
 	return &Client{
 		httpClient:                &http.Client{},
 		LocationReportHttpAddress: reportHttpAddr,
 		LocationPrivateKey:        locPrivKey,
 		LocationAdvertisementKey:  locAdvertKey,
-		PubkeyMagic1:              pubkeyMagic1,
-		PubkeyMagic2:              pubkeyMagic2,
-		ModemID:                   modemID,
+		CustomMagicKey:            customMagicKey,
 	}
 }
 
