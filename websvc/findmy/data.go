@@ -81,7 +81,7 @@ func (client *Client) DownloadDataByte(ctx context.Context, messageID, byteIndex
 			return nil, fmt.Errorf("failed to execute location report http request: %w", err)
 		}
 		maps.Copy(allBitsResp, resp.ToMap())
-		time.Sleep(time.Duration(1000+rand.IntN(2000)) * time.Millisecond)
+		time.Sleep(time.Duration(10000+rand.IntN(7000)) * time.Millisecond)
 	}
 	for _, falsePub := range bitFalseAdvId {
 		resp, err := client.doReportRequest(ctx, MultiReportRequest{HashedAdvertisedPublicKey: []string{falsePub}, Days: lookBackDays})
@@ -89,7 +89,7 @@ func (client *Client) DownloadDataByte(ctx context.Context, messageID, byteIndex
 			return nil, fmt.Errorf("failed to execute location report http request: %w", err)
 		}
 		maps.Copy(allBitsResp, resp.ToMap())
-		time.Sleep(time.Duration(1000+rand.IntN(2000)) * time.Millisecond)
+		time.Sleep(time.Duration(10000+rand.IntN(7000)) * time.Millisecond)
 	}
 	// Correspond the retrieved reports to each bit guess, and thus recover the byte value.
 	resultBits := make([]byte, 0, 8)
