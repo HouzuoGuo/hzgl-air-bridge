@@ -35,7 +35,7 @@ Output will be written to output/
 
 Navigate to `firmware/src/`, copy `custom.h.example` and rename into custom.h.
 
-The file contains parameters for the firmware to beacon both location and data. Follow in-file instructions to change the parameters.
+The file contains parameters for the firmware to beacon both location and data. Follow in-file instructions to change the parameters. The keys file line "hashed adv key" is not used anywhere.
 
 ### 3. Upload beacon firmware
 
@@ -90,9 +90,7 @@ go run main.go \
   -locadvertkey='the advertisement key found in output/some.keys file' \
 
   # Data reporting parameters.
-  -pubkey1=... \ # The decimal value of custom_pubkey_magic1.
-  -pubkey2=... \ # The decimal value of custom_pubkey_magic2.
-  -modemid=... \ # The decimal value of custom_modem_id.
+  -custommagic=... \ # The base64-encoded value of const uint8_t custom_magic_key.
 
   # Save all reports to this file.
   -file=/tmp/hzgl-air-bridge.json
