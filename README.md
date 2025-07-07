@@ -58,7 +58,7 @@ docker network create hzgl-air-bridge-network
 docker run -d --restart always --name anisette -p 6969:6969 --volume anisette-data:/home/Alcoholic/.config/anisette-v3/ --network hzgl-air-bridge-network hzgl/anisette-v3-server
 # Username and password input requires an interactive terminal.
 # See https://github.com/HouzuoGuo/macless-haystack for the image build instructions.
-docker run -it --restart unless-stopped --name macless-haystack -p 6176:6176 --volume bridge-data:/app/data/ --network hzgl-air-bridge-network hzgl/air-bridge-ws
+docker run -it --restart always --name macless-haystack -p 6176:6176 --volume bridge-data:/app/data/ --network hzgl-air-bridge-network hzgl/air-bridge-ws
 ```
 
 #### To start over
