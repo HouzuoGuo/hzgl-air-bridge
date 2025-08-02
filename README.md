@@ -21,7 +21,15 @@ This project derives from:
 
 ## Usage instructions
 
-### 1. Generate keys for location reporting
+### 1. Apple account preparation
+
+Instead of using your own main Apple account, please prepare a new separate Apple account.
+
+When registering the new account, make sure to use SMS text for two factor authentication.
+
+Apple internally maintains a "trust status" for each account, try log into the new account on a genuine Apple device help improve its trust level.
+
+### 2. Generate keys for location reporting
 
 Navigate to `provision/` and run:
 
@@ -61,9 +69,16 @@ docker run -d --restart always --name anisette -p 6969:6969 --volume anisette-da
 docker run -it --restart always --name macless-haystack -p 6176:6176 --volume bridge-data:/app/data/ --network hzgl-air-bridge-network hzgl/air-bridge-ws
 ```
 
+`hzgl/air-bridge-ws` will walk you through Apple account login and registers a fake macbook device under your Apple account.
+
+Be aware that every time you *change* the Apple account two-factor authentication phone number,
+the Apple-internal authentication method ID increments by 1, the ID begins at `0` for a newly created Apple account.
+The image contains a hard-coded authentication method ID of `1` (i.e. pick the 2nd 2FA method), if this does not work for youthis is not your case,
+inspect the web requests & responses from the image's log output to determine the correct ID, then change the source code of `pypush_gsa_icloud.py` in the image.
+
 #### To start over
 
-If you have to start over, e.g. changing to a different Apple account or having incidentally deleted the fake macbook device from iCloud:
+If you have to start over, e.g. changing to a different Apple account or re-register the fake :
 
 ```bash
 docker ps -aq | xargs docker rm -f
@@ -110,6 +125,11 @@ A built-in web server provides a lightweight frontend to view the reports:
 ```
 
 <img src="https://raw.githubusercontent.com/HouzuoGuo/hzgl-air-bridge/refs/heads/master/web-demo.png" width="415" height="435" />
+
+#### 6. Routine maintenance
+
+Every couple of weeks, repeat the `To start over` and `Lauch server infrastructure` procedure to delete and re-register the fake macbook device.
+Failure to do so will occasionally result in Apple account ban.
 
 ## License
 
