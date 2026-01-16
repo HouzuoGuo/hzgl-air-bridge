@@ -71,11 +71,6 @@ docker run -it --restart always --name macless-haystack -p 6176:6176 --volume br
 
 `hzgl/air-bridge-ws` will walk you through Apple account login and registers a fake macbook device under your Apple account.
 
-Be aware that every time you *change* the Apple account two-factor authentication phone number,
-the Apple-internal authentication method ID increments by 1, the ID begins at `0` for a newly created Apple account.
-The `hzgl/air-bridge-ws` image contains a hard-coded authentication method ID of `1` (i.e. pick the 2nd 2FA method),
-if this does not work for you, please inspect the web requests & responses during the login process, determine the correct method ID, and change the source code of `pypush_gsa_icloud.py` in the image.
-
 #### To start over
 
 If you have to start over, e.g. changing to a different Apple account or re-register the fake :
