@@ -15,9 +15,9 @@ import (
 func main() {
 	// Common reporting parameters.
 	var maxDays int
-	flag.IntVar(&maxDays, "days", 1, "query this many days of location reports in search of locations and data bytes")
+	flag.IntVar(&maxDays, "days", 1, "retrieve data and location up to this many days old, keep it low (<3) to reduce unnecessary API calls to Apple.")
 	var maxBitReportSpreadMins int
-	flag.IntVar(&maxBitReportSpreadMins, "spreadmins", 30, "tolerate this many minutes of uncertainty when retrieving data bytes")
+	flag.IntVar(&maxBitReportSpreadMins, "spreadmins", 20, "tolerate this many minutes of spread between individual bites when re-assembling whole data bytes, 20 minutes is good for most cases, any shorter may prevent byte data recovery.")
 	var reportWebAddress string
 	flag.StringVar(&reportWebAddress, "airbridgews", "http://localhost:6176/", "url of the hzgl/air-bridge-ws:latest web service")
 

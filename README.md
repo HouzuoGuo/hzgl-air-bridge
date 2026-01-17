@@ -71,15 +71,19 @@ docker run -it --restart always --name macless-haystack -p 6176:6176 --volume br
 
 `hzgl/air-bridge-ws` will walk you through Apple account login and registers a fake macbook device under your Apple account.
 
+If you encounter a rare failure "Enter the correct password for this Apple Account" after entering 2FA code, visit https://appleid.apple.com/ and proceed to login with user name and password,
+stop at 2FA and close the web page, then restart the `macless-haystack` container and repeat the login, it should succeed in the new attempt.
+
 #### To start over
 
-If you have to start over, e.g. changing to a different Apple account or re-register the fake :
+If you have to start over (e.g. changing to a different Apple account, or re-register the fake macbook), first remove the existing fake macbook from the Apple account, and then:
 
 ```bash
 docker ps -aq | xargs docker rm -f
 docker volume rm -f anisette-data
 docker volume rm -f bridge-data
 docker network remove hzgl-air-bridge-network
+docker pull hzgl/air-bridge-ws
 ```
 
 The procedure deletes all stored apple ID and fake macbook device credentials.
@@ -91,8 +95,8 @@ To retrieve the latest data & location reports, navigate to `websvc/` and run:
 ``` bash
 go run main.go \
   # Common reporting parameters.
-  -days=1 \ # Retrieve data and location from this from this many days of historical reports, keep it between 1 and 7.
-  -spreadmins=20 \ # When retrieving data, tolerate this many minutes of spread between each bit of the data byte. 20 minutes is good for most cases.
+  -days=1 \ # Retrieve data and location up to this many days old, keep it low (<3) to reduce unnecessary API calls to Apple.
+  -spreadmins=20 \ # Tolerate this many minutes of spread between individual bites when re-assembling whole data bytes, 20 minutes is good for most cases, any shorter may prevent byte data recovery.
   -airbridgews=http://localhost:6176 \ # The URL of hzgl/air-bridge-ws container web server.
 
   # Location reporting parameters.
@@ -126,6 +130,11 @@ A built-in web server provides a lightweight frontend to view the reports:
 Every couple of weeks, repeat the `To start over` and `Lauch server infrastructure` procedure to delete and re-register the fake macbook device.
 Failure to do so will occasionally result in Apple account ban.
 
+## News
+
+- 20251001 - the SMS 2FA authentication process seems broken, I'll keep an eye on the upstream bug reports to look for a solution.
+- 20260117 - fixed SMS 2FA with kudos to upstream project discussions, added workaround for occasional login failure after 2FA.
+
 ## License
 
-This project derives from AGPLv3 (openhaystack & send-my) and GPLv3 (macless-haystack, see also https://github.com/dchristl/macless-haystack/issues/147) licensed code, the project is therefore licensed under AGPLv3.
+This project derives from AGPLv3 (openhaystack & send-my) and GPLv3 (macless-haystack) licensed code, the project is therefore licensed under AGPLv3.
