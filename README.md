@@ -71,8 +71,12 @@ docker run -it --restart always --name macless-haystack -p 6176:6176 --volume br
 
 `hzgl/air-bridge-ws` will walk you through Apple account login and registers a fake macbook device under your Apple account.
 
-If you encounter a rare failure "Enter the correct password for this Apple Account" after entering 2FA code, visit https://appleid.apple.com/ and proceed to login with user name and password,
-stop at 2FA and close the web page, then restart the `macless-haystack` container and repeat the login, it should succeed in the new attempt.
+Occasionally you may encounter obscure login errors such as:
+
+- After entering password, Apple login response suggests "the operation cannot be completed" and recommends to retry at a later time.
+- After entering password and 2FA code, Apple login response suggests "enter the correct password for this Apple account".
+
+Should they occur, login to https://appleid.apple.com/ in an incognito browser tab, then allow the login attempt from the account's registered iOS device, do not copy the 2FA code and close the web browser tab. Restart `macless-haystack` container and repeat the login process, it should then succeed.
 
 #### To start over
 
