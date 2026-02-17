@@ -1,13 +1,10 @@
 #pragma once
-#include <esp_bt.h>
-#include <esp_bt_defs.h>
-#include <esp_bt_main.h>
-#include <esp_gap_ble_api.h>
-#include <esp_gatt_defs.h>
-#include <esp_gattc_api.h>
+#include <Arduino.h>
+#include <BLEDevice.h>
+#include <BLEUtils.h>
+#include <BLEScan.h>
+#include <BLEAdvertising.h>
 #include <esp_log.h>
-#include <esp_random.h>
-#include <esp_sleep.h>
 #include "bme280.h"
 
 typedef enum
@@ -38,7 +35,7 @@ const int BT_TX_ITER_DEVICE_COUNT = 4;
 const int BT_TX_ITER_MESSAGE = 5;
 const int BT_TX_TOTAL_OPTIONS = 6;
 
-const int BT_SCAN_DURATION_SEC = 5;
+const int BT_SCAN_DURATION_SEC = 1;
 const int BT_SCAN_INTERVAL_SEC = 60;
 
 extern bt_iter_snapshot bt_iter;
@@ -46,20 +43,21 @@ extern int bt_tx_iter;
 extern int bt_nearby_device_count;
 extern int bt_tx_message_value;
 
+// Compatibility type used by the original codebase for 6-byte addresses.
+typedef uint8_t esp_bd_addr_t[6];
+
 void bt_init();
 void bt_task_work();
 void bt_task_fun(void *_);
 
-// The bluetooth stack callback function for beaconing in generic access profile.
-void bt_esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param);
 void bt_set_addr_from_key(esp_bd_addr_t addr, const uint8_t *public_key);
 void bt_set_payload_from_key(uint8_t *payload, const uint8_t *public_key);
 void bt_set_phy_addr_and_advert_data();
 int bt_get_remaining_transmission_ms();
 void bt_update_beacon_iter();
 void bt_start_scan_nearby_devices();
-void bt_set_addr_and_payload_for_bit(uint32_t index, uint32_t msg_id, uint8_t bit);
-void bt_send_data_once_blocking(uint8_t *data_to_send, uint32_t len, uint32_t msg_id);
+void bt_set_addr_and_payload_for_bit(uint8_t index, uint8_t msg_id, uint8_t bit);
+void bt_send_data_once_blocking(uint8_t *data_to_send, uint32_t len, uint8_t msg_id);
 void bt_send_location_once();
 void bt_send_data_bme280_temp();
 void bt_send_data_bme280_humid();

@@ -1,7 +1,7 @@
 #include <esp_task_wdt.h>
 #include <esp_sleep.h>
 #include <esp_log.h>
-#include <Esp.h>
+#include <esp_system.h>
 #include "i2c.h"
 #include "bme280.h"
 #include "oled.h"
@@ -81,10 +81,10 @@ void supervisor_reboot()
 
 void supervisor_health_check()
 {
-    uint32_t heap_min_free = ESP.getMinFreeHeap();
-    ESP_LOGI(LOG_TAG, "heap usage: free - %dKB, min.free - %dKB, capacity - %dKB, maxalloc: %dKB, min.free stack: %dKB",
-             ESP.getFreeHeap() / 1024, heap_min_free / 1024, ESP.getHeapSize() / 1024,
-             ESP.getMaxAllocHeap() / 1024, uxTaskGetStackHighWaterMark(NULL) / 1024);
+    uint32_t heap_free = esp_get_free_heap_size();
+    uint32_t heap_min_free = heap_free;
+    ESP_LOGI(LOG_TAG, "heap usage: free - %dKB, min.free - %dKB, min.free stack: %dKB",
+             heap_free / 1024, heap_min_free / 1024, uxTaskGetStackHighWaterMark(NULL) / 1024);
     UBaseType_t button_stack_free = uxTaskGetStackHighWaterMark(button_task),
                 bluetooth_stack_free = uxTaskGetStackHighWaterMark(bt_task),
                 bme280_stack_free = uxTaskGetStackHighWaterMark(bme280_task),

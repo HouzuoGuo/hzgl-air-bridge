@@ -1,5 +1,6 @@
 #include "button.h"
-#include <Arduino.h>
+#include <esp_timer.h>
+#include <driver/gpio.h>
 #include <esp_task_wdt.h>
 #include <esp_log.h>
 #include <freertos/FreeRTOS.h>
@@ -13,7 +14,14 @@ int button_last_press_millis = 0;
 bool button_init()
 {
     ESP_LOGI(LOG_TAG, "initialising button");
-    pinMode(BUTTON_GPIO, INPUT_PULLDOWN);
+    gpio_config_t io_conf = {
+        .pin_bit_mask = (1ULL << BUTTON_GPIO),
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_ENABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    gpio_config(&io_conf);
     ESP_LOGI(LOG_TAG, "button initialised successfully");
     return true;
 }
@@ -33,11 +41,12 @@ void button_task_fun(void *_)
 {
     while (true)
     {
-        int button = digitalRead(BUTTON_GPIO);
+        int button = gpio_get_level(GPIO_NUM_1);
         if (button == 0)
         {
 
-            if (button_click_down > 0 && millis() - button_click_down > BUTTON_TASK_LOOP_INTERVAL_MILLIS + 2)
+            int now_ms = (int)(esp_timer_get_time() / 1000ULL);
+            if (button_click_down > 0 && now_ms - button_click_down > BUTTON_TASK_LOOP_INTERVAL_MILLIS + 2)
             {
                 // Releasing a click.
                 button_click_down = 0;
@@ -45,26 +54,26 @@ void button_task_fun(void *_)
                 ESP_LOGI(LOG_TAG, "setting transmission message to %d", bt_tx_message_value);
             }
         }
-        else if (millis() - button_last_press_millis > BUTTON_NO_INPUT_SLEEP_MILLIS)
+        else if ((int)(esp_timer_get_time() / 1000ULL) - button_last_press_millis > BUTTON_NO_INPUT_SLEEP_MILLIS)
         {
             // Reset the timer and wake up the screen, don't considedr this a click.
-            button_last_press_millis = millis();
+            button_last_press_millis = (int)(esp_timer_get_time() / 1000ULL);
         }
-        else if (millis() - button_last_press_millis < BUTTON_TASK_LOOP_INTERVAL_MILLIS * 2)
+        else if ((int)(esp_timer_get_time() / 1000ULL) - button_last_press_millis < BUTTON_TASK_LOOP_INTERVAL_MILLIS * 2)
         {
             // Ignore bounces for 200 milliseconds.
         }
         else if (button_click_down == 0)
         {
             // Register the down click.
-            button_click_down = millis();
-            button_last_press_millis = millis();
+            button_click_down = (int)(esp_timer_get_time() / 1000ULL);
+            button_last_press_millis = (int)(esp_timer_get_time() / 1000ULL);
         }
-        else if (millis() - button_click_down > BUTTON_TASK_LOOP_INTERVAL_MILLIS * 5)
+        else if ((int)(esp_timer_get_time() / 1000ULL) - button_click_down > BUTTON_TASK_LOOP_INTERVAL_MILLIS * 5)
         {
             // Hold the click down to rapidly increase the message value.
             button_inc_bt_tx_message();
-            button_last_press_millis = millis();
+            button_last_press_millis = (int)(esp_timer_get_time() / 1000ULL);
         }
         esp_task_wdt_reset();
         vTaskDelay(pdMS_TO_TICKS(BUTTON_TASK_LOOP_INTERVAL_MILLIS));
