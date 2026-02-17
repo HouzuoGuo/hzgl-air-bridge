@@ -43,6 +43,7 @@ esp_bd_addr_t bt_dev_addr = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 // Arduino BLE objects
 static BLEAdvertising *pAdvertising = nullptr;
 static BLEScan *pBLEScan = nullptr;
+static BLEServer *pBLEServer = nullptr;
 
 // Bluetooth scanning / advertising handled via Arduino BLE APIs.
 
@@ -84,10 +85,9 @@ void bt_init()
 {
     ESP_LOGI(LOG_TAG, "initialising bluetooth");
     BLEDevice::init("");
-    // Defer creation of scan/advertising objects until first use to avoid
-    // triggering NimBLE host internals during early init.
-    pBLEScan = nullptr;
-    pAdvertising = nullptr;
+    pBLEServer = BLEDevice::createServer();
+    pAdvertising = pBLEServer->getAdvertising();
+    pBLEScan = BLEDevice::getScan();
     ESP_LOGI(LOG_TAG, "bluetooth initialised successfully");
 }
 
@@ -116,6 +116,7 @@ void bt_task_work()
             if (pBLEScan)
             {
                 pBLEScan->stop();
+                pBLEScan->clearResults();
             }
             bt_scan_in_progress = false;
         }
@@ -176,19 +177,17 @@ void bt_set_payload_from_key(uint8_t *payload, const uint8_t *public_key)
 
 void bt_set_phy_addr_and_advert_data()
 {
-    if (!pAdvertising)
-    {
-        pAdvertising = BLEDevice::getAdvertising();
-    }
-    if (pAdvertising)
-    {
-        pAdvertising->stop();
-        BLEAdvertisementData adv;
-        String manuf = String((const char *)bt_advert_data, sizeof(bt_advert_data));
-        adv.setManufacturerData(manuf);
-        pAdvertising->setAdvertisementData(adv);
-        pAdvertising->start();
-    }
+    ESP_LOGI(LOG_TAG, "@@@@@@@@@@ adv func enter");
+    ESP_LOGI(LOG_TAG, "@@@@@@@@@@ adv got advert");
+    pAdvertising->stop();
+    ESP_LOGI(LOG_TAG, "@@@@@@@@@@ adv stopped");
+    BLEAdvertisementData adv;
+    String manuf = String((const char *)bt_advert_data, sizeof(bt_advert_data));
+    adv.setManufacturerData(manuf);
+    ESP_LOGI(LOG_TAG, "@@@@@@@@@@ man data set");
+    pAdvertising->setAdvertisementData(adv);
+    ESP_LOGI(LOG_TAG, "@@@@@@@@@@ adv starting now");
+    pAdvertising->start();
 }
 
 void bt_set_addr_and_payload_for_bit(uint8_t index, uint8_t msg_id, uint8_t bit)
@@ -319,6 +318,7 @@ void bt_send_location_once()
     {
         bt_set_addr_from_key(bt_dev_addr, custom_public_key);
         bt_set_payload_from_key(bt_advert_data, custom_public_key);
+        ESP_LOGI(LOG_TAG, "@@@@@@@@@@ beaconing location with public key (attempt %d)", i);
         bt_set_phy_addr_and_advert_data();
         vTaskDelay(pdMS_TO_TICKS(BT_BEACON_IX_MS));
     }
@@ -423,10 +423,6 @@ void bt_start_scan_nearby_devices()
     ESP_LOGI(LOG_TAG, "scanning nearly devices");
     bt_scan_in_progress = true;
     bt_ongoing_scan_count = 0;
-    if (!pBLEScan)
-    {
-        pBLEScan = BLEDevice::getScan();
-    }
     pBLEScan->setActiveScan(true);
     BLEScanResults *results = pBLEScan->start(BT_SCAN_DURATION_SEC, false);
     bt_ongoing_scan_count = results->getCount();
