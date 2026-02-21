@@ -6,6 +6,7 @@ import (
 	"crypto/elliptic"
 	"encoding/binary"
 	"fmt"
+	"log"
 	"math/big"
 	"slices"
 	"sort"
@@ -73,6 +74,7 @@ func (client *Client) DownloadLocation(ctx context.Context, lookBackDays int) (r
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate hashed advertisement key: %w", err)
 	}
+	log.Printf("looking for location report for advert key %s, key hash %s", util.HexString(client.LocationAdvertisementKey), locAdvertKeyHash)
 	multiReportResp, err := client.doReportRequest(ctx, MultiReportRequest{HashedAdvertisedPublicKey: []string{locAdvertKeyHash}, Days: lookBackDays})
 	if err != nil {
 		return nil, err

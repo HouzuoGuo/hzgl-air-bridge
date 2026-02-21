@@ -3,6 +3,7 @@ package findmy
 import (
 	"context"
 	"fmt"
+	"log"
 	"maps"
 	"math/rand/v2"
 	"time"
@@ -53,6 +54,9 @@ func (client *Client) DownloadDataByte(ctx context.Context, messageID, byteIndex
 		_, bitTrueKey := client.dataAdvertPublicKey(messageID, bi, true)
 		if bitTrueKey == nil {
 			return nil, fmt.Errorf("failed to calculate the advertisement public key for message ID %d, byte index %d, bit true", messageID, byteIndex)
+		}
+		if bi == 0 {
+			log.Printf("looking for data (true) report for advert key %s", util.HexString(bitTrueKey))
 		}
 		trueAdvertisementID, err := util.HashedBeacon(bitTrueKey)
 		// log.Printf("@@@@@@@@@ bit true guess: msg %d byte %d bit %d: %s, adv: %s", messageID, byteIndex, bi, util.HexString(bitTrueKey), trueAdvertisementID)
