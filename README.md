@@ -136,8 +136,9 @@ Failure to do so will occasionally result in Apple account ban.
 
 ## News
 
-- 20251001 - the SMS 2FA authentication process seems broken, I'll keep an eye on the upstream bug reports to look for a solution.
+- 20260222 - remove esp32-c3 environment for now; port esp32-c6 code to use NimBLE, which seems to be more popular & better maintained than BlueDroid for newer members of the ESP32 chip family.
 - 20260117 - fixed SMS 2FA with kudos to upstream project discussions, added workaround for occasional login failure after 2FA.
+- 20251001 - the SMS 2FA authentication process seems broken, I'll keep an eye on the upstream bug reports to look for a solution.
 
 ## License
 

@@ -1,11 +1,15 @@
-#include <Arduino.h>
+#include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
 #include <esp_task_wdt.h>
 #include <esp_log.h>
-#include <esp_bt.h>
-#include <esp_gap_ble_api.h>
-#include <esp_bt_main.h>
+#include <BLEDevice.h>
+#include <BLEUtils.h>
+#include <BLEScan.h>
+#include <BLEAdvertising.h>
 #include <string.h>
+#include <nimble/ble.h>
+#include <host/ble_gap.h>
+#include <host/ble_hs.h>
 
 #include "custom.h"
 #include "crypt.h"
@@ -17,9 +21,7 @@
 static const char LOG_TAG[] = __FILE__;
 
 int bt_last_scan_millis = 0;
-bool bt_scan_in_progress = false;
 int bt_last_update_millis = 0;
-int bt_ongoing_scan_count = 0;
 
 bt_iter_snapshot bt_iter = {
     .data = {0},
@@ -36,41 +38,42 @@ int bt_tx_iter = -1;
 int bt_tx_message_value = -1;
 int bt_nearby_device_count = 0;
 
-// The beacon functions will reset the device address.
+BLEAdvertising *bt_advert = nullptr;
+BLEScan *bt_scan = nullptr;
+BLEServer *bt_server = nullptr;
+// The bluetooth mac address contains the first part of the public key (beacon data payload).
 esp_bd_addr_t bt_dev_addr = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-
-// Bluetooth nearby scanning parameters.
-static esp_ble_scan_params_t ble_scan_params = {
-    .scan_type = BLE_SCAN_TYPE_ACTIVE,
-    .own_addr_type = BLE_ADDR_TYPE_PUBLIC,
-    .scan_filter_policy = BLE_SCAN_FILTER_ALLOW_ALL,
-    .scan_interval = (int)((float)BT_SCAN_DURATION_SEC / 0.625),
-    .scan_window = (int)((float)BT_SCAN_DURATION_SEC / 0.625),
-    // Avoid counting devices repeatedly when it beacons multiple times during the scan.
-    .scan_duplicate = BLE_SCAN_DUPLICATE_ENABLE,
-};
-
-// Beacon transmission parameters.
-esp_ble_adv_params_t bt_advert_params = {
-    // The advertisement intervals do not matter much, leave them at a second or two.
-    // The beacon functions control the attempts and duty cycle.
-    .adv_int_min = 0x00A0, // 100ms
-    .adv_int_max = 0x00A0,
-    .adv_type = ADV_TYPE_NONCONN_IND,
-    .own_addr_type = BLE_ADDR_TYPE_RANDOM,
-    .channel_map = ADV_CHNL_ALL,
-    .adv_filter_policy = ADV_FILTER_ALLOW_SCAN_ANY_CON_ANY,
-};
-
+// The manufacture data contains the rest of the public key (beacon data payload).
 uint8_t bt_advert_data[31] = {
-    0x1e,       /* Length (30) */
-    0xff,       /* Manufacturer Specific Data (type 0xff) */
-    0x4c, 0x00, /* Company ID (Apple) */
-    0x12, 0x19, /* Offline Finding type and length */
-    0x00,       /* State */
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x1e, /* Length (30) */
+    0xff, /* Manufacturer Specific Data (type 0xff) */
+    0x4c,
+    0x00, /* Company ID (Apple) */
+    0x12,
+    0x19, /* Offline Finding type and length */
+    0x00, /* State */
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
     0x00, /* First two bits */
     0x00, /* Hint (0x00) */
 };
@@ -78,43 +81,34 @@ uint8_t bt_advert_data[31] = {
 void bt_init()
 {
     ESP_LOGI(LOG_TAG, "initialising bluetooth");
-    ESP_ERROR_CHECK(esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT));
-    esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_bt_controller_init(&bt_cfg));
-    ESP_ERROR_CHECK(esp_bt_controller_enable(ESP_BT_MODE_BLE));
-    ESP_ERROR_CHECK(esp_bluedroid_init());
-    ESP_ERROR_CHECK(esp_bluedroid_enable());
-    // +9dBm is the maximum power level for ESP32.
+    BLEDevice::init("");
+    if ((bt_server = BLEDevice::createServer()) == nullptr)
+    {
+        ESP_LOGE(LOG_TAG, "failed to create BLE server");
+    }
+    if ((bt_advert = bt_server->getAdvertising()) == nullptr)
+    {
+        ESP_LOGE(LOG_TAG, "failed to get advertising object");
+    }
+    if ((bt_scan = BLEDevice::getScan()) == nullptr)
+    {
+        ESP_LOGE(LOG_TAG, "failed to get scan object");
+    }
+    // 9dBm appears to max out the ESP32 chip: https://docs.espressif.com/projects/esp-techpedia/en/latest/esp-friends/advanced-development/performance/modify-tx-power.html
+    ESP_ERROR_CHECK(esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_SCAN, ESP_PWR_LVL_P9));
     ESP_ERROR_CHECK(esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, ESP_PWR_LVL_P9));
-    ESP_ERROR_CHECK(esp_ble_gap_register_callback(bt_esp_gap_cb));
-
+    ESP_ERROR_CHECK(esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_DEFAULT, ESP_PWR_LVL_P9));
     ESP_LOGI(LOG_TAG, "bluetooth initialised successfully");
 }
 
 void bt_task_work()
 {
     // Scan for nearby bluetooth devices every BT_SCAN_INTERVAL_SEC for 5 seconds.
-    if (bt_last_scan_millis <= 0 || millis() - bt_last_scan_millis > BT_SCAN_INTERVAL_SEC * 1000)
+    int current_ms = (int)(esp_timer_get_time() / 1000ULL);
+    if (bt_last_scan_millis <= 0 || current_ms - bt_last_scan_millis > BT_SCAN_INTERVAL_SEC * 1000)
     {
-        // TODO FIXME: the first scan mistakenly counts reepated beacon transmissions without de-duplicating them.
         bt_start_scan_nearby_devices();
-        bt_last_scan_millis = millis();
-        return;
-    }
-    else if (millis() - bt_last_scan_millis < BT_SCAN_DURATION_SEC * 1000)
-    {
-        // Wait for the scan to finish.
-        return;
-    }
-    else if (millis() - bt_last_scan_millis < BT_SCAN_DURATION_SEC * 1000 + (BT_TASK_LOOP_INTERVAL_MILLIS * 2))
-    {
-        // Stop scanning and give the callback a brief moment (100ms) to process the stop event.
-        if (bt_scan_in_progress)
-        {
-            // Call the stop function explicitly to ensure the ESP_GAP_BLE_SCAN_STOP_COMPLETE_EVT is triggered.
-            esp_ble_gap_stop_scanning();
-            bt_scan_in_progress = false;
-        }
+        bt_last_scan_millis = current_ms;
         return;
     }
     // Beacon location and data.
@@ -152,59 +146,6 @@ void bt_task_fun(void *_)
     }
 }
 
-void bt_esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
-{
-    esp_err_t err;
-    switch (event)
-    {
-        // Beacon transmission event callbacks.
-    case ESP_GAP_BLE_ADV_DATA_RAW_SET_COMPLETE_EVT:
-        ESP_ERROR_CHECK(esp_ble_gap_start_advertising(&bt_advert_params));
-        break;
-
-    case ESP_GAP_BLE_ADV_START_COMPLETE_EVT:
-        if ((err = param->adv_start_cmpl.status) != ESP_BT_STATUS_SUCCESS)
-        {
-            ESP_LOGE(LOG_TAG, "failed to start bt advertisement: %s", esp_err_to_name(err));
-        }
-        else
-        {
-            // ESP_LOGI(LOG_TAG, "bt advertisement started");
-        }
-        break;
-
-    case ESP_GAP_BLE_ADV_STOP_COMPLETE_EVT:
-        if ((err = param->adv_stop_cmpl.status) != ESP_BT_STATUS_SUCCESS)
-        {
-            ESP_LOGE(LOG_TAG, "failed to stop bt advertisement: %s", esp_err_to_name(err));
-        }
-        else
-        {
-            // ESP_LOGI(LOG_TAG, "bt advertisement stopped");
-        }
-        break;
-        // Nearby device scanning event callbacks.
-    case ESP_GAP_BLE_SCAN_RESULT_EVT:
-        if (param->scan_rst.search_evt == ESP_GAP_SEARCH_INQ_RES_EVT)
-        {
-            bt_ongoing_scan_count++;
-            if (bt_ongoing_scan_count % 5 == 0)
-            {
-                ESP_LOGI(LOG_TAG, "found %d nearly devices thus far", bt_ongoing_scan_count);
-            }
-        }
-        break;
-    case ESP_GAP_BLE_SCAN_STOP_COMPLETE_EVT:
-        bt_nearby_device_count = bt_ongoing_scan_count;
-        ESP_LOGI(LOG_TAG, "found %d nearly devices in total", bt_nearby_device_count);
-        bt_ongoing_scan_count = 0;
-        bt_scan_in_progress = false;
-        break;
-    default:
-        break;
-    }
-}
-
 void bt_set_addr_from_key(esp_bd_addr_t addr, const uint8_t *public_key)
 {
     addr[0] = public_key[0] | 0b11000000; // static random address
@@ -223,12 +164,54 @@ void bt_set_payload_from_key(uint8_t *payload, const uint8_t *public_key)
     payload[29] = public_key[0] >> 6;
 }
 
-void bt_set_phy_addr_and_advert_data()
+void bt_transmit_beacon_data()
 {
-    ESP_ERROR_CHECK(esp_ble_gap_stop_advertising());
-    ESP_ERROR_CHECK(esp_ble_gap_set_rand_addr(bt_dev_addr));
-    ESP_ERROR_CHECK(esp_ble_gap_config_adv_data_raw((uint8_t *)&bt_advert_data, sizeof(bt_advert_data)));
-    // ESP_LOGI(LOG_TAG, "bt physical address: %02x %02x %02x %02x %02x %02x", bt_dev_addr[0], bt_dev_addr[1], bt_dev_addr[2], bt_dev_addr[3], bt_dev_addr[4], bt_dev_addr[5]);
+    ESP_LOGI(LOG_TAG, "transmitting beacon, addr: %02x %02x %02x %02x %02x %02x, payload: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x",
+             bt_dev_addr[0], bt_dev_addr[1], bt_dev_addr[2], bt_dev_addr[3], bt_dev_addr[4], bt_dev_addr[5],
+             bt_advert_data[0], bt_advert_data[1], bt_advert_data[2], bt_advert_data[3], bt_advert_data[4], bt_advert_data[5], bt_advert_data[6], bt_advert_data[7],
+             bt_advert_data[8], bt_advert_data[9], bt_advert_data[10], bt_advert_data[11], bt_advert_data[12], bt_advert_data[13], bt_advert_data[14], bt_advert_data[15],
+             bt_advert_data[16], bt_advert_data[17], bt_advert_data[18], bt_advert_data[19], bt_advert_data[20], bt_advert_data[21], bt_advert_data[22], bt_advert_data[23],
+             bt_advert_data[24], bt_advert_data[25], bt_advert_data[26], bt_advert_data[27], bt_advert_data[28], bt_advert_data[29], bt_advert_data[30]);
+    int rc = 0;
+    // The device address contains a part of the public key (beacon payload).
+    uint8_t rnd_addr[6];
+    // NimBLE uses little endian for the device mac address.
+    for (int i = 0; i < 6; ++i)
+    {
+        rnd_addr[i] = bt_dev_addr[5 - i];
+    }
+    if ((rc = ble_hs_id_set_rnd(rnd_addr)) != 0)
+    {
+        ESP_LOGE(LOG_TAG, "ble_hs_id_set_rnd failed: %d", rc);
+        return;
+    }
+    // The manufacture data contains the rest of the public key (beacon payload).
+    struct ble_hs_adv_fields fields;
+    memset(&fields, 0, sizeof(fields));
+    fields.mfg_data = (uint8_t *)&bt_advert_data[2];
+    fields.mfg_data_len = sizeof(bt_advert_data) - 2;
+    if ((rc = ble_gap_adv_set_fields(&fields)) != 0)
+    {
+        ESP_LOGE(LOG_TAG, "ble_gap_adv_set_fields failed: %d", rc);
+        return;
+    }
+    // https://adamcatley.com/AirTag.html#software - "Advertising PDU type: Connectable undirected (ADV_IND)"
+    struct ble_gap_adv_params adv_params;
+    memset(&adv_params, 0, sizeof(adv_params));
+    adv_params.conn_mode = BLE_GAP_CONN_MODE_NON;
+    adv_params.disc_mode = BLE_GAP_DISC_MODE_GEN;
+    adv_params.itvl_min = 0x20;
+    adv_params.itvl_max = 0x20;
+    if ((rc = ble_gap_adv_start(BLE_OWN_ADDR_RANDOM, NULL, BT_BEACON_IX_MS, &adv_params, BLEAdvertising::handleGAPEvent, (void *)bt_advert)) != 0)
+    {
+        ESP_LOGE(LOG_TAG, "ble_gap_adv_start failed: %d", rc);
+        return;
+    }
+    vTaskDelay(pdMS_TO_TICKS(BT_BEACON_IX_MS));
+    if (((rc = ble_gap_adv_stop())) != 0)
+    {
+        ESP_LOGE(LOG_TAG, "ble_gap_adv_stop failed: %d", rc);
+    }
 }
 
 void bt_set_addr_and_payload_for_bit(uint8_t index, uint8_t msg_id, uint8_t bit)
@@ -269,11 +252,9 @@ void bt_send_data_once_blocking(uint8_t *data_to_send, uint32_t len, uint8_t msg
             }
             ESP_LOGI(LOG_TAG, "beaconing data message id %d byte %d bit %d: %d", msg_id, byte_index, bit_index, bit_value);
             bt_set_addr_and_payload_for_bit(byte_index * 8 + bit_index, msg_id, bit_value);
-            bt_set_phy_addr_and_advert_data();
-            delay(BT_BEACON_IX_MS);
+            bt_transmit_beacon_data();
         }
     }
-    esp_ble_gap_stop_advertising();
 }
 
 int bt_get_remaining_transmission_ms()
@@ -281,10 +262,14 @@ int bt_get_remaining_transmission_ms()
     if (bt_tx_message_value >= 0)
     {
         // The beacon is alternating between location and message beacons every iteration.
-        return BT_TASK_LOOP_INTERVAL_MILLIS - (millis() - bt_last_update_millis);
+        int current_ms = (int)(esp_timer_get_time() / 1000ULL);
+        return BT_TASK_LOOP_INTERVAL_MILLIS - (current_ms - bt_last_update_millis);
     }
     // The beacon stored a snapshot of telemetry data and will continuously beacon it for some minutes.
-    return BT_TX_ITER_DURATION_MILLIS - (millis() - bt_last_update_millis);
+    {
+        int current_ms = (int)(esp_timer_get_time() / 1000ULL);
+        return BT_TX_ITER_DURATION_MILLIS - (current_ms - bt_last_update_millis);
+    }
 }
 
 void bt_advance_tx_iter()
@@ -330,7 +315,7 @@ void bt_update_beacon_iter()
     // Update the beacon data and advance the iteration number at a regular interval.
     if (bt_last_update_millis <= 0 || bt_get_remaining_transmission_ms() <= 0)
     {
-        bt_last_update_millis = millis();
+        bt_last_update_millis = (int)(esp_timer_get_time() / 1000ULL);
         memset(&bt_iter.data, 0, sizeof(bt_iter.data)); // to be populated by sensor data tx functions
         bt_iter.bme280.temp_celcius = bme280_latest.temp_celcius;
         bt_iter.bme280.humidity_percent = bme280_latest.humidity_percent;
@@ -348,14 +333,7 @@ void bt_send_location_once()
     ESP_LOGI(LOG_TAG, "beaconing location");
     bt_set_addr_from_key(bt_dev_addr, custom_public_key);
     bt_set_payload_from_key(bt_advert_data, custom_public_key);
-    for (int i = 0; i < 2; i++)
-    {
-        bt_set_addr_from_key(bt_dev_addr, custom_public_key);
-        bt_set_payload_from_key(bt_advert_data, custom_public_key);
-        bt_set_phy_addr_and_advert_data();
-        delay(BT_BEACON_IX_MS);
-    }
-    esp_ble_gap_stop_advertising();
+    bt_transmit_beacon_data();
 }
 
 void bt_send_data_bme280_temp()
@@ -450,11 +428,14 @@ void bt_send_data_bme280_press()
 
 void bt_start_scan_nearby_devices()
 {
-    ESP_LOGI(LOG_TAG, "scanning nearly devices");
-    bt_ongoing_scan_count = 0;
-    bt_scan_in_progress = true;
-    ESP_ERROR_CHECK(esp_ble_gap_set_scan_params(&ble_scan_params));
-    ESP_ERROR_CHECK(esp_ble_gap_start_scanning(BT_SCAN_DURATION_SEC));
+    ESP_LOGI(LOG_TAG, "scanning neerby bluetooth devices");
+    bt_scan->setActiveScan(true);
+    // The scan operation blocks.
+    BLEScanResults *results = bt_scan->start(BT_SCAN_DURATION_SEC, false);
+    bt_nearby_device_count = results->getCount();
+    bt_scan->stop();
+    bt_scan->clearResults();
+    ESP_LOGI(LOG_TAG, "found %d bluetooth devices nearby", bt_nearby_device_count);
 }
 
 void bt_send_message()

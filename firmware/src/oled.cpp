@@ -2,6 +2,8 @@
 #include <freertos/FreeRTOS.h>
 #include <U8g2lib.h>
 #include <esp_log.h>
+#include <esp_timer.h>
+#include <esp_system.h>
 #include <string.h>
 #include "button.h"
 #include "i2c.h"
@@ -39,6 +41,7 @@ void oled_task_fun(void *_)
     char lines[OLED_HEIGHT_LINES][OLED_WIDTH_CHARS] = {0};
     while (true)
     {
+        int now_ms = (int)(esp_timer_get_time() / 1000ULL);
         if (!oled_avail)
         {
             goto next;
@@ -50,10 +53,11 @@ void oled_task_fun(void *_)
             oled.drawStr(OLED_X_OFFSET, OLED_Y_OFFSET + line * OLED_FONT_HEIGHT_PX, lines[line]);
         }
         oled.sendBuffer();
-        if (millis() - button_last_press_millis > BUTTON_NO_INPUT_SLEEP_MILLIS)
+
+        if (now_ms - button_last_press_millis > BUTTON_NO_INPUT_SLEEP_MILLIS)
         {
             // Too long without user input, start blinking the screen.
-            if (millis() % 3000 < 1000)
+            if ((now_ms % 3000) < 1000)
             {
                 oled.setPowerSave(0);
             }
@@ -62,7 +66,9 @@ void oled_task_fun(void *_)
                 oled.setPowerSave(1);
             }
             goto next;
-        } else {
+        }
+        else
+        {
             oled.setPowerSave(0);
         }
     next:
@@ -95,7 +101,7 @@ void oled_render_status(char lines[OLED_HEIGHT_LINES][OLED_WIDTH_CHARS])
     switch ((oled_iter_counter++ / (OLED_SCROLL_INTERVAL_MILLIS / OLED_TASK_LOOP_INTERVAL_MILLIS)) % 3)
     {
     case 0:
-        snprintf(lines[3], OLED_WIDTH_CHARS, "Mem %d/%dK", (ESP.getHeapSize() - ESP.getFreeHeap()) / 1024, ESP.getHeapSize() / 1024);
+        snprintf(lines[3], OLED_WIDTH_CHARS, "Mem %dK", esp_get_free_heap_size() / 1024);
         break;
     case 1:
         // fallthrough

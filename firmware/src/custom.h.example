@@ -1,6 +1,5 @@
 #pragma once
 #include <stdint.h>
-#include <esp_bt_defs.h>
 
 /*
 The public key is only for beaconing location reports, which can be decrypted by a private key.

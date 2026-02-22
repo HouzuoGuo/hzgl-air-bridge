@@ -1,12 +1,8 @@
 // hzgl-air-bridge beacon firmware.
 
-#include <Arduino.h>
 #include <esp_bt.h>
-#include <esp_bt_defs.h>
-#include <esp_bt_main.h>
-#include <esp_gap_ble_api.h>
-#include <esp_gatt_defs.h>
-#include <esp_gattc_api.h>
+#include <esp_system.h>
+#include <esp_timer.h>
 #include <esp_log.h>
 #include <esp_random.h>
 #include <esp_sleep.h>
@@ -46,11 +42,8 @@ void setup(void)
     ESP_ERROR_CHECK(esp_task_wdt_add(NULL));
 
     esp_log_level_set("*", ESP_LOG_VERBOSE);
-    // Bluetooth doesn't work below 80 MHz, despite claims of support down to 40 MHz.
-    setCpuFrequencyMhz(80);
-    Serial.begin(115200);
-    ESP_LOGI(LOG_TAG, "hzgl-air-bridge is starting up, xtal %d Mhz, cpu %d Mhz, apb %d Mhz",
-             getXtalFrequencyMhz(), getCpuFrequencyMhz(), getApbFrequency() / 1000000);
+    // Initialise logging and environment.
+    ESP_LOGI(LOG_TAG, "hzgl-air-bridge is starting up");
 
     // Initialise hardware and peripherals in the correct order.
     button_init();
@@ -67,7 +60,7 @@ void loop()
 {
     // Bluetooth and peripheral functions are in separate tasks created by the supervisor.
     // The arduino SDK main loop only maintains the watchdog.
-    if (millis() < SUPERVISOR_UNCONDITIONAL_RESTART_MILLIS)
+    if ((esp_timer_get_time() / 1000ULL) < SUPERVISOR_UNCONDITIONAL_RESTART_MILLIS)
     {
         esp_task_wdt_reset();
     }
@@ -76,6 +69,5 @@ void loop()
         ESP_LOGW(LOG_TAG, "performing a routine restart");
         esp_restart();
     }
-    // Use arduino's delay instead of vTaskDelay to avoid a deadlock in arduino's loop function.
-    delay(SUPERVISOR_TASK_LOOP_INTERVAL_MILLIS);
+    vTaskDelay(pdMS_TO_TICKS(SUPERVISOR_TASK_LOOP_INTERVAL_MILLIS));
 }
