@@ -111,8 +111,10 @@ void bt_task_work()
         bt_last_scan_millis = current_ms;
         return;
     }
-    // Beacon location and data.
-    bt_update_beacon_iter();
+    // Update the data packet for the data (not location) beacon.
+    bt_update_data_packet();
+    bt_advance_tx_iter();
+    ESP_LOGI(LOG_TAG, "this tx iteration: %d", bt_tx_iter);
     switch (bt_tx_iter)
     {
     case BT_TX_ITER_TEMP:
@@ -166,7 +168,7 @@ void bt_set_payload_from_key(uint8_t *payload, const uint8_t *public_key)
 
 void bt_transmit_beacon_data()
 {
-    ESP_LOGI(LOG_TAG, "transmitting beacon, addr: %02x %02x %02x %02x %02x %02x, payload: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x",
+    ESP_LOGI(LOG_TAG, "beaconing addr: %02x %02x %02x %02x %02x %02x, payload: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x",
              bt_dev_addr[0], bt_dev_addr[1], bt_dev_addr[2], bt_dev_addr[3], bt_dev_addr[4], bt_dev_addr[5],
              bt_advert_data[0], bt_advert_data[1], bt_advert_data[2], bt_advert_data[3], bt_advert_data[4], bt_advert_data[5], bt_advert_data[6], bt_advert_data[7],
              bt_advert_data[8], bt_advert_data[9], bt_advert_data[10], bt_advert_data[11], bt_advert_data[12], bt_advert_data[13], bt_advert_data[14], bt_advert_data[15],
@@ -257,65 +259,77 @@ void bt_send_data_once_blocking(uint8_t *data_to_send, uint32_t len, uint8_t msg
     }
 }
 
-int bt_get_remaining_transmission_ms()
-{
-    if (bt_tx_message_value >= 0)
-    {
-        // The beacon is alternating between location and message beacons every iteration.
-        int current_ms = (int)(esp_timer_get_time() / 1000ULL);
-        return BT_TASK_LOOP_INTERVAL_MILLIS - (current_ms - bt_last_update_millis);
-    }
-    // The beacon stored a snapshot of telemetry data and will continuously beacon it for some minutes.
-    {
-        int current_ms = (int)(esp_timer_get_time() / 1000ULL);
-        return BT_TX_ITER_DURATION_MILLIS - (current_ms - bt_last_update_millis);
-    }
-}
-
 void bt_advance_tx_iter()
 {
-    // If there's a message to transmit, alternate between location and message beacons.
-    if (bt_tx_message_value >= 0)
+    switch (bt_tx_iter)
     {
-        if (bt_tx_iter == BT_TX_ITER_MESSAGE)
+    case BT_TX_ITER_TEMP:
+        bt_tx_iter = BT_TX_ITER_HUMID;
+        if (!bme280_avail)
         {
-            bt_tx_iter = BT_TX_ITER_LOCATION;
+            bt_advance_tx_iter();
         }
-        else
+        break;
+    case BT_TX_ITER_HUMID:
+        bt_tx_iter = BT_TX_ITER_PRESS;
+        if (!bme280_avail)
         {
-            bt_tx_iter = BT_TX_ITER_MESSAGE;
+            bt_advance_tx_iter();
         }
-    }
-    else
-    {
-        // In the absence of a message, cycle through all location and telemetry data beacons.
-        bt_tx_iter++;
-        if (bt_tx_iter == BT_TX_ITER_MESSAGE)
+        break;
+    case BT_TX_ITER_PRESS:
+        bt_tx_iter = BT_TX_ITER_LOCATION;
+        break;
+    case BT_TX_ITER_LOCATION:
+        bt_tx_iter = BT_TX_ITER_DEVICE_COUNT;
+        if (bt_nearby_device_count <= 0)
         {
-            // Skip the message beacon.
-            bt_tx_iter++;
+            bt_advance_tx_iter();
         }
-        if (bt_tx_iter >= BT_TX_TOTAL_OPTIONS)
+        break;
+    case BT_TX_ITER_DEVICE_COUNT:
+        bt_tx_iter = BT_TX_ITER_MESSAGE;
+        if (bt_tx_message_value < 0)
         {
-            bt_tx_iter = 0;
+            bt_advance_tx_iter();
         }
-        // If the environment sensor is unavailable, skip their beacons.
-        if (!bme280_avail && bt_tx_iter >= BT_TX_ITER_TEMP && bt_tx_iter <= BT_TX_ITER_PRESS)
+        break;
+    case BT_TX_ITER_MESSAGE:
+        bt_tx_iter = BT_TX_ITER_TEMP;
+        if (!bme280_avail)
         {
-            while (bt_tx_iter >= BT_TX_ITER_TEMP && bt_tx_iter <= BT_TX_ITER_PRESS)
-            {
-                bt_tx_iter++;
-            }
+            bt_advance_tx_iter();
         }
+        break;
+    default:
+        bt_tx_iter = BT_TX_ITER_TEMP;
+        if (!bme280_avail)
+        {
+            bt_advance_tx_iter();
+        }
+        break;
     }
 }
 
-void bt_update_beacon_iter()
+int bt_get_ms_till_data_refresh()
 {
-    // Update the beacon data and advance the iteration number at a regular interval.
-    if (bt_last_update_millis <= 0 || bt_get_remaining_transmission_ms() <= 0)
+    int ret = BT_DATA_UPDATE_INTERVAL_MS - (millis() - bt_last_update_millis);
+    if (ret < 0 || ret >= BT_DATA_UPDATE_INTERVAL_MS)
     {
-        bt_last_update_millis = (int)(esp_timer_get_time() / 1000ULL);
+        ret = 0;
+    }
+    return ret;
+}
+
+void bt_update_data_packet()
+{
+    // Freeze the sensor & message data snapshot for a couple of minutes, ensure their bits are picked up by Find My network.
+    // Update the snapshot at regular interval.
+    if (bt_get_ms_till_data_refresh() <= 0 ||
+        (bt_iter.nearby_device_count == 0 && bt_nearby_device_count > 0) || // first BT scan completed
+        bt_iter.message_value != bt_tx_message_value)                       // new message to send
+    {
+        bt_last_update_millis = millis();
         memset(&bt_iter.data, 0, sizeof(bt_iter.data)); // to be populated by sensor data tx functions
         bt_iter.bme280.temp_celcius = bme280_latest.temp_celcius;
         bt_iter.bme280.humidity_percent = bme280_latest.humidity_percent;
@@ -323,8 +337,8 @@ void bt_update_beacon_iter()
         bt_iter.bme280.altitude_masl = bme280_latest.altitude_masl;
         bt_iter.nearby_device_count = bt_nearby_device_count;
         bt_iter.message_value = bt_tx_message_value;
-        bt_advance_tx_iter();
-        ESP_LOGI(LOG_TAG, "update beacon iteration to %d", bt_tx_iter);
+        ESP_LOGI(LOG_TAG, "updated data packet: temp %.2f, humidity %.2f, pressure %.2f, nearby devices %d, message value %d",
+                 bt_iter.bme280.temp_celcius, bt_iter.bme280.humidity_percent, bt_iter.bme280.pressure_hpa, bt_iter.nearby_device_count, bt_iter.message_value);
     }
 }
 

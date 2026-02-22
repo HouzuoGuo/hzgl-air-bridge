@@ -19,8 +19,8 @@ typedef struct
 // Approximate (worst) beacon transmission time, which is based on 20ms TX + 20mn interval + buffer per channel, all 3 channels, 2 transmissions each.
 const int BT_BEACON_IX_MS = (20 + 20 + 10) * 3 * 2;
 const int BT_TASK_LOOP_INTERVAL_MILLIS = 3000;
-// Most data bits arrive within seconds of each other, but occasionally they can arrive a little over 5 minutes from each other.
-const int BT_TX_ITER_DURATION_MILLIS = 6 * 60 * 1000;
+// How long to freeze a data snapshot for beacon transmission. Bits can arrive out of order, it may take 5 minutes for Find My network to collect a complete packet of bits.
+const int BT_DATA_UPDATE_INTERVAL_MS = 6 * 60 * 1000;
 
 const int BT_TX_ITER_TEMP = 0;
 const int BT_TX_ITER_HUMID = 1;
@@ -38,21 +38,22 @@ extern int bt_tx_iter;
 extern int bt_nearby_device_count;
 extern int bt_tx_message_value;
 
-// Compatibility type used by the original codebase for 6-byte addresses.
-typedef uint8_t bt_addr_t[6];
-
 void bt_init();
 void bt_task_work();
 void bt_task_fun(void *_);
 
 void bt_set_addr_from_key(uint8_t *addr, const uint8_t *public_key);
 void bt_set_payload_from_key(uint8_t *payload, const uint8_t *public_key);
-void bt_transmit_beacon_data();
-int bt_get_remaining_transmission_ms();
-void bt_update_beacon_iter();
-void bt_start_scan_nearby_devices();
 void bt_set_addr_and_payload_for_bit(uint8_t index, uint8_t msg_id, uint8_t bit);
 void bt_send_data_once_blocking(uint8_t *data_to_send, uint32_t len, uint8_t msg_id);
+
+void bt_transmit_beacon_data();
+void bt_update_data_packet();
+
+void bt_start_scan_nearby_devices();
+void bt_advance_tx_iter();
+int bt_get_ms_till_data_refresh();
+
 void bt_send_location_once();
 void bt_send_data_bme280_temp();
 void bt_send_data_bme280_humid();

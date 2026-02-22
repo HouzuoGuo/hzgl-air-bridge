@@ -97,15 +97,19 @@ void oled_render_status(char lines[OLED_HEIGHT_LINES][OLED_WIDTH_CHARS])
     }
 
     // Refresh the screen content faster than the scrolling interval of the status line.
-    int remaining_tx_sec = bt_get_remaining_transmission_ms() / 1000;
-    switch ((oled_iter_counter++ / (OLED_SCROLL_INTERVAL_MILLIS / OLED_TASK_LOOP_INTERVAL_MILLIS)) % 3)
+    int remaining_tx_sec = bt_get_ms_till_data_refresh() / 1000;
+    switch ((oled_iter_counter++ / (OLED_SCROLL_INTERVAL_MILLIS / OLED_TASK_LOOP_INTERVAL_MILLIS)) % 5)
     {
     case 0:
-        snprintf(lines[3], OLED_WIDTH_CHARS, "Mem %dK", esp_get_free_heap_size() / 1024);
+        snprintf(lines[3], OLED_WIDTH_CHARS, "MemFree %dK", esp_get_free_heap_size() / 1024);
         break;
     case 1:
-        // fallthrough
+        snprintf(lines[3], OLED_WIDTH_CHARS, "Uptime %dmin", millis() / 1000 / 60);
+        break;
     case 2:
+    case 3:
+        // Display the data snapshot three times as often, fall through.
+    case 4:
         switch (bt_tx_iter)
         {
         case BT_TX_ITER_TEMP:
@@ -118,7 +122,7 @@ void oled_render_status(char lines[OLED_HEIGHT_LINES][OLED_WIDTH_CHARS])
             snprintf(lines[3], OLED_WIDTH_CHARS, "B %.0f %ds", bt_iter.bme280.pressure_hpa, remaining_tx_sec);
             break;
         case BT_TX_ITER_LOCATION:
-            snprintf(lines[3], OLED_WIDTH_CHARS, "B LOC %ds", remaining_tx_sec);
+            snprintf(lines[3], OLED_WIDTH_CHARS, "B LOC");
             break;
         case BT_TX_ITER_DEVICE_COUNT:
             snprintf(lines[3], OLED_WIDTH_CHARS, "B BT%d %ds", bt_iter.nearby_device_count, remaining_tx_sec);
