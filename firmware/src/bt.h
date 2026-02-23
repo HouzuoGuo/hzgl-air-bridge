@@ -17,7 +17,7 @@ typedef struct
 } bt_iter_snapshot;
 
 // Approximate (worst) beacon transmission time, which is based on 20ms TX + 20mn interval + buffer per channel, all 3 channels, 2 transmissions each.
-const int BT_BEACON_IX_MS = (20 + 20 + 10) * 3 * 2;
+const int BT_BEACON_IX_MS = 1000;
 const int BT_TASK_LOOP_INTERVAL_MILLIS = 3000;
 // How long to freeze a data snapshot for beacon transmission. Bits can arrive out of order, it may take 5 minutes for Find My network to collect a complete packet of bits.
 const int BT_DATA_UPDATE_INTERVAL_MS = 6 * 60 * 1000;

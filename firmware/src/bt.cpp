@@ -200,16 +200,18 @@ void bt_transmit_beacon_data()
     // https://adamcatley.com/AirTag.html#software - "Advertising PDU type: Connectable undirected (ADV_IND)"
     struct ble_gap_adv_params adv_params;
     memset(&adv_params, 0, sizeof(adv_params));
-    adv_params.conn_mode = BLE_GAP_CONN_MODE_NON;
+    adv_params.conn_mode = BLE_GAP_CONN_MODE_UND;
     adv_params.disc_mode = BLE_GAP_DISC_MODE_GEN;
     adv_params.itvl_min = 0x20;
     adv_params.itvl_max = 0x20;
+    adv_params.channel_map = BLE_GAP_ADV_DFLT_CHANNEL_MAP;
+    adv_params.filter_policy = 0;
     if ((rc = ble_gap_adv_start(BLE_OWN_ADDR_RANDOM, NULL, BT_BEACON_IX_MS, &adv_params, BLEAdvertising::handleGAPEvent, (void *)bt_advert)) != 0)
     {
         ESP_LOGE(LOG_TAG, "ble_gap_adv_start failed: %d", rc);
         return;
     }
-    vTaskDelay(pdMS_TO_TICKS(BT_BEACON_IX_MS));
+    vTaskDelay(pdMS_TO_TICKS(BT_BEACON_IX_MS + 50));
     if (((rc = ble_gap_adv_stop())) != 0)
     {
         ESP_LOGE(LOG_TAG, "ble_gap_adv_stop failed: %d", rc);
